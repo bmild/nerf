@@ -9,6 +9,7 @@ Tensorflow implementation of optimizing a neural representation for a single sce
  [Jonathan T. Barron](http://jonbarron.info/)<sup>2</sup>, 
  [Ravi Ramamoorthi](http://cseweb.ucsd.edu/~ravir/)<sup>3</sup>, 
  [Ren Ng](https://www2.eecs.berkeley.edu/Faculty/Homepages/yirenng.html)<sup>1</sup>
+
  <sup>1</sup>UC Berkeley, <sup>2</sup>Google Research, <sup>3</sup>UC San Diego  
   \*denotes equal contribution  
   
@@ -30,7 +31,7 @@ The LLFF data loader requires ImageMagick.
 
 You will also need the [LLFF code](http://github.com/fyusion/llff) (and COLMAP) set up to compute poses if you want to run on your own real data.
 
-## TL;DR
+## Running code
 
 ### Optimizing a NeRF
 
