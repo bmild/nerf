@@ -3,7 +3,7 @@ basedir = ./logs
 datadir = ./data/nerf_synthetic/lego
 dataset_type = blender
 
-full_res = False
+half_res = True
 no_batching = True
 
 N_samples = 64
