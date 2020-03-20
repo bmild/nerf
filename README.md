@@ -1,5 +1,5 @@
 # NeRF: Neural Radiance Fields
-### [Project](http://tancik.com/nerf) | [Video](https://youtu.be/JuH79E8rdKc) | [Paper](https://arxiv.org) 
+### [Project](http://tancik.com/nerf) | [Video](https://youtu.be/JuH79E8rdKc) | [Paper](https://arxiv.org/abs/2003.08934) 
 
 Tensorflow implementation of optimizing a neural representation for a single scene and rendering new views.<br><br>
 [NeRF: Representing Scenes as Neural Radiance Fields for View Synthesis](http://tancik.com/nerf)  
