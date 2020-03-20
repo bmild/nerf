@@ -63,7 +63,7 @@ def load_blender_data(basedir, half_res=False, testskip=1):
             poses.append(np.array(frame['transform_matrix']))
         imgs = (np.array(imgs) / 255.).astype(np.float32) # keep all 4 channels (RGBA)
         poses = np.array(poses).astype(np.float32)
-        counts.append(counts[-1] + len(meta['frames']))
+        counts.append(counts[-1] + imgs.shape[0])
         all_imgs.append(imgs)
         all_poses.append(poses)
     
