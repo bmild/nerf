@@ -30,6 +30,13 @@ The LLFF data loader requires ImageMagick.
 
 You will also need the [LLFF code](http://github.com/fyusion/llff) (and COLMAP) set up to compute poses if you want to run on your own real data.
 
+## What is a NeRF? 
+
+A neural radiance field is a simple fully connected network (weights are ~5MB) trained to reproduce input views of a single scene using a rendering loss. The network directly maps from spatial location and viewing direction (5D input) to color and opacity (4D output), acting as the "volume" so we can use volume rendering to differentiably render new views.
+
+Optimizing a NeRF takes between a few hours and a day or two (depending on resolution) and only requires a single GPU. Rendering an image from an optimized NeRF takes somewhere between less than a second and ~30 seconds, again depending on resolution.
+
+
 ## Running code
 
 ### Optimizing a NeRF
@@ -55,3 +62,8 @@ Run
 bash download_example_weights.sh
 ```
 to get a pretrained high-res NeRF for the Fern dataset. Now you can use the `render_demo.ipynb` to render new views.
+
+
+## Generating poses for your own scenes
+
+We recommend using the `imgs2poses.py` script from the [LLFF code](https://github.com/fyusion/llff). Then you can pass the base scene directory into our code using `--datadir <myscene>` along with `-dataset_type llff`. You can take a look at the `config_fern.txt` config file for example settings to use for a forward facing scene.
