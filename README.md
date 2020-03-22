@@ -50,10 +50,17 @@ To optimize a low-res Fern NeRF:
 ```
 python run_nerf.py --config config_fern.txt
 ```
+After 200k iterations (about 15 hours), you should get a video like this at `logs/fern_test/fern_test_spiral_200000_rgb.mp4`:
+
+![ferngif](https://people.eecs.berkeley.edu/~bmild/nerf/fern_200k_256w.gif)
+
 To optimize a low-res Lego NeRF:
 ```
 python run_nerf.py --config config_lego.txt
 ```
+After 200k iterations, you should get a video like this:
+
+![legogif](https://people.eecs.berkeley.edu/~bmild/nerf/lego_200k_256w.gif)
 
 ### Rendering a NeRF
 
@@ -66,4 +73,14 @@ to get a pretrained high-res NeRF for the Fern dataset. Now you can use the `ren
 
 ## Generating poses for your own scenes
 
-We recommend using the `imgs2poses.py` script from the [LLFF code](https://github.com/fyusion/llff). Then you can pass the base scene directory into our code using `--datadir <myscene>` along with `-dataset_type llff`. You can take a look at the `config_fern.txt` config file for example settings to use for a forward facing scene.
+### Don't have poses?
+
+We recommend using the `imgs2poses.py` script from the [LLFF code](https://github.com/fyusion/llff). Then you can pass the base scene directory into our code using `--datadir <myscene>` along with `-dataset_type llff`. You can take a look at the `config_fern.txt` config file for example settings to use for a forward facing scene. For a spherically captured 360 scene, we recomment adding the `--no_ndc --spherify --lindisp` flags.
+
+### Already have poses!
+
+In `run_nerf.py` and all other code, we use the same pose coordinate system as in [COLMAP](https://colmap.github.io/format.html#images-txt):
+
+> The local camera coordinate system of an image is defined in a way that the X axis points to the right, the Y axis to the bottom, and the Z axis to the front as seen from the image.
+
+Poses are stored as 3x4 numpy arrays (not quaternions) that represent camera-to-world transformation matrices. The other data you will need is simple pinhole camera intrinsics (`hwf = [height, width, focal length]`) and near/far scene bounds. Take a look at [our data loading code](https://github.com/bmild/nerf/blob/master/run_nerf.py#L406) to see more.
