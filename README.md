@@ -39,6 +39,8 @@ Optimizing a NeRF takes between a few hours and a day or two (depending on resol
 
 ## Running code
 
+Here we show how to run our code on two example scenes. You can download the rest of the synthetic and real data used in the paper [here](https://drive.google.com/drive/folders/128yBriW1IG_3NJ5Rp7APSTZsJqdJdfc1).
+
 ### Optimizing a NeRF
 
 Run
