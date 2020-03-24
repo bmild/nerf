@@ -94,7 +94,8 @@ def load_dv_data(scene='cube', basedir='/data/deepvoxels', testskip=8):
     valimgs = np.stack([imageio.imread(os.path.join(valimgd, f))/255. for f in imgfiles[::testskip]], 0).astype(np.float32)
     
     all_imgs = [imgs, valimgs, testimgs]
-    counts = [0] + [x.shape for x in all_imgs]
+    counts = [0] + [x.shape[0] for x in all_imgs]
+    counts = np.cumsum(counts)
     i_split = [np.arange(counts[i], counts[i+1]) for i in range(3)]
     
     imgs = np.concatenate(all_imgs, 0)

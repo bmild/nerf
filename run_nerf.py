@@ -59,11 +59,13 @@ def render_rays(ray_batch,
         return outputs
         
         
-    def raw2outputs(raw, z_vals):
+    def raw2outputs(raw, z_vals, rays_d):
         raw2alpha = lambda raw, dists, act_fn=tf.nn.relu: 1.-tf.exp(-act_fn(raw)*dists)
         
         dists = z_vals[...,1:] - z_vals[...,:-1]
         dists = tf.concat([dists, tf.broadcast_to([1e10], dists[...,:1].shape)], -1) # [N_rays, N_samples]
+        
+        dists = dists * tf.linalg.norm(rays_d[...,None,:], axis=-1)
 
         rgb = tf.math.sigmoid(raw[...,:3])  # [N_rays, N_samples, 3]
         noise = 0.
@@ -114,7 +116,7 @@ def render_rays(ray_batch,
     
         
     raw = run_network(pts)
-    rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals)
+    rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d)
     
     if N_importance > 0:
         
@@ -129,7 +131,7 @@ def render_rays(ray_batch,
         
         run_fn = network_fn if network_fine is None else network_fine
         raw = run_network(pts, fn=run_fn)
-        rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals)
+        rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d)
         
         
     ret = {'rgb_map' : rgb_map, 'disp_map' : disp_map, 'acc_map' : acc_map}

@@ -1,0 +1,16 @@
+expname = dvox_greek_test
+basedir = ./logs
+# datadir = /your/path/to/deepvoxels/data
+dataset_type = deepvoxels
+shape = greek
+
+no_batching = True
+
+N_samples = 64
+N_importance = 64
+
+use_viewdirs = True
+
+white_bkgd = True
+
+N_rand = 1024
