@@ -510,7 +510,7 @@ def train():
             # Default is smoother render_poses path
             images = None
             
-        testsavedir = os.path.join(basedir, expname, 'renderonly_{}_{:06d}'.format('test' if args.render_test else 'path', global_step.numpy()))
+        testsavedir = os.path.join(basedir, expname, 'renderonly_{}_{:06d}'.format('test' if args.render_test else 'path', start))
         os.makedirs(testsavedir, exist_ok=True)
         print('test poses shape', render_poses.shape)
         
