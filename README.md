@@ -71,8 +71,12 @@ Run
 ```
 bash download_example_weights.sh
 ```
-to get a pretrained high-res NeRF for the Fern dataset. Now you can use the `render_demo.ipynb` to render new views.
+to get a pretrained high-res NeRF for the Fern dataset. Now you can use [`render_demo.ipynb`](https://github.com/bmild/nerf/blob/master/render_demo.ipynb) to render new views.
 
+
+### Extracting geometry from a NeRF
+
+Check out [`extract_mesh.ipynb`](https://github.com/bmild/nerf/blob/master/extract_mesh.ipynb) for an example of running marching cubes to extract a triangle mesh from a trained NeRF network. Additional requirements: you'll need the [PyMCubes](https://github.com/pmneila/PyMCubes) package for marching cubes plus the [trimesh](https://github.com/mikedh/trimesh) and [pyrender](https://github.com/mmatl/pyrender) packages if you want to render the mesh inside the notebook.
 
 ## Generating poses for your own scenes
 
