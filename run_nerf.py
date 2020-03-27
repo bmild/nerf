@@ -19,44 +19,71 @@ from load_deepvoxels import load_dv_data
 from load_blender import load_blender_data
 
 
+    
+def batchify(fn, chunk):
+    if chunk is None:
+        return fn
+    def ret(inputs):
+        return tf.concat([fn(inputs[i:i+chunk]) for i in range(0, inputs.shape[0], chunk)], 0)
+    return ret
+    
+    
+def run_network(inputs, viewdirs, fn, embed_fn, embeddirs_fn, netchunk=1024*64):
+    
+    inputs_flat = tf.reshape(inputs, [-1, inputs.shape[-1]])
+        
+    embedded = embed_fn(inputs_flat)
+    if viewdirs is not None:
+        input_dirs = tf.broadcast_to(viewdirs[:,None], inputs.shape)
+        input_dirs_flat = tf.reshape(input_dirs, [-1, input_dirs.shape[-1]])
+        embedded_dirs = embeddirs_fn(input_dirs_flat)
+        embedded = tf.concat([embedded, embedded_dirs], -1)
+        
+    outputs_flat = batchify(fn, netchunk)(embedded)
+    outputs = tf.reshape(outputs_flat, list(inputs.shape[:-1]) + [outputs_flat.shape[-1]])
+    return outputs
+
 
 def render_rays(ray_batch, 
                 network_fn, 
+                
+                network_query_fn,
+                
                 N_samples, 
-                embed_fn=tf.identity,
+#                 embed_fn=tf.identity,
                 retraw=False, 
                 lindisp=False,
                 perturb=0.,
                 N_importance=0, 
                 network_fine=None,
-                embeddirs_fn=None,
+#                 embeddirs_fn=None,
                 white_bkgd=False,
                 raw_noise_std=0.,
-                netchunk=1024*64,
+#                 netchunk=1024*64,
                 verbose=False):
     
-    def batchify(fn, chunk=netchunk):
-        if chunk is None:
-            return fn
-        def ret(inputs):
-            return tf.concat([fn(inputs[i:i+chunk]) for i in range(0, inputs.shape[0], chunk)], 0)
-        return ret
+#     def batchify(fn, chunk=netchunk):
+#         if chunk is None:
+#             return fn
+#         def ret(inputs):
+#             return tf.concat([fn(inputs[i:i+chunk]) for i in range(0, inputs.shape[0], chunk)], 0)
+#         return ret
     
-    def run_network(inputs, N_vdirs=None, fn=network_fn):
-        inputs_flat = tf.reshape(inputs, [-1, inputs.shape[-1]])
+#     def run_network(inputs, N_vdirs=None, fn=network_fn):
+#         inputs_flat = tf.reshape(inputs, [-1, inputs.shape[-1]])
             
-        embedded = embed_fn(inputs_flat)
-        if embeddirs_fn is not None:
-            viewdirs = ray_batch[:,-3:]
-            input_dirs = tf.broadcast_to(viewdirs[:,None], inputs.shape)
-            input_dirs_flat = tf.reshape(input_dirs, [-1, input_dirs.shape[-1]])
-            embedded_dirs = embeddirs_fn(input_dirs_flat)
-            embedded = tf.concat([embedded, embedded_dirs], -1)
+#         embedded = embed_fn(inputs_flat)
+#         if embeddirs_fn is not None:
+#             viewdirs = ray_batch[:,-3:]
+#             input_dirs = tf.broadcast_to(viewdirs[:,None], inputs.shape)
+#             input_dirs_flat = tf.reshape(input_dirs, [-1, input_dirs.shape[-1]])
+#             embedded_dirs = embeddirs_fn(input_dirs_flat)
+#             embedded = tf.concat([embedded, embedded_dirs], -1)
             
-        if verbose: print('embedded range', embedded.numpy().min(), embedded.numpy().max(), embedded.numpy().mean())
-        outputs_flat = batchify(fn)(embedded)
-        outputs = tf.reshape(outputs_flat, list(inputs.shape[:-1]) + [outputs_flat.shape[-1]])
-        return outputs
+#         if verbose: print('embedded range', embedded.numpy().min(), embedded.numpy().max(), embedded.numpy().mean())
+#         outputs_flat = batchify(fn)(embedded)
+#         outputs = tf.reshape(outputs_flat, list(inputs.shape[:-1]) + [outputs_flat.shape[-1]])
+#         return outputs
         
         
     def raw2outputs(raw, z_vals, rays_d):
@@ -91,9 +118,9 @@ def render_rays(ray_batch,
     
     N_rays = ray_batch.shape[0]
     rays_o, rays_d = ray_batch[:,0:3], ray_batch[:,3:6] # [N_rays, 3] each
+    viewdirs = ray_batch[:,-3:] if ray_batch.shape[-1] > 8 else None
     bounds = tf.reshape(ray_batch[...,6:8], [-1,1,2])
-    near, far = bounds[...,0], bounds[...,1] # [-1,1]
-    
+    near, far = bounds[...,0], bounds[...,1] # [-1,1]    
     
     t_vals = tf.linspace(0., 1., N_samples)
     if not lindisp:
@@ -115,7 +142,8 @@ def render_rays(ray_batch,
     pts = rays_o[...,None,:] + rays_d[...,None,:] * z_vals[...,:,None] # [N_rays, N_samples, 3]
     
         
-    raw = run_network(pts)
+#     raw = run_network(pts)
+    raw = network_query_fn(pts, viewdirs, network_fn)
     rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d)
     
     if N_importance > 0:
@@ -130,7 +158,8 @@ def render_rays(ray_batch,
         pts = rays_o[...,None,:] + rays_d[...,None,:] * z_vals[...,:,None] # [N_rays, N_samples + N_importance, 3]
         
         run_fn = network_fn if network_fine is None else network_fine
-        raw = run_network(pts, fn=run_fn)
+#         raw = run_network(pts, fn=run_fn)
+        raw = network_query_fn(pts, viewdirs, run_fn)
         rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d)
         
         
@@ -278,16 +307,22 @@ def create_nerf(args):
         grad_vars += model_fine.trainable_variables
         models['model_fine'] = model_fine
         
+    
+    network_query_fn = lambda inputs, viewdirs, network_fn : run_network(inputs, viewdirs, network_fn,
+                                                                embed_fn=embed_fn, 
+                                                                embeddirs_fn=embeddirs_fn,
+                                                                netchunk=args.netchunk)
         
     render_kwargs_train = {
+        'network_query_fn' : network_query_fn,
         'perturb' : args.perturb,
         'N_importance' : args.N_importance,
         'network_fine' : model_fine,
-        'embed_fn' : embed_fn,
+#         'embed_fn' : embed_fn,
         'N_samples' : args.N_samples,
         'network_fn' : model,
         'use_viewdirs' : args.use_viewdirs,
-        'embeddirs_fn' : embeddirs_fn,
+#         'embeddirs_fn' : embeddirs_fn,
         'white_bkgd' : args.white_bkgd,
         'raw_noise_std' : args.raw_noise_std,
     }
@@ -348,7 +383,8 @@ def config_parser():
     parser.add_argument("--N_rand", type=int, default=32*32*4, help='batch size (number of random rays per gradient step)')
     parser.add_argument("--lrate", type=float, default=5e-4, help='learning rate')
     parser.add_argument("--lrate_decay", type=int, default=250, help='exponential learning rate decay (in 1000s)')
-    parser.add_argument("--chunk", type=int, default=1024*32, help='number of rays processed in parallel, decrease if runing out of memory')
+    parser.add_argument("--chunk", type=int, default=1024*32, help='number of rays processed in parallel, decrease if running out of memory')
+    parser.add_argument("--netchunk", type=int, default=1024*64, help='number of pts sent through network in parallel, decrease if running out of memory')
     parser.add_argument("--no_batching", action='store_true', help='only take random rays from 1 image at a time') 
     parser.add_argument("--no_reload", action='store_true', help='do not reload weights from saved ckpt') 
     parser.add_argument("--ft_path", type=str, default=None, help='specific weights npy file to reload for coarse network')
