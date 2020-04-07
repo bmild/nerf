@@ -1,3 +1,6 @@
+import os
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
+
 import sys
 import tensorflow as tf
 import numpy as np
@@ -9,8 +12,6 @@ from run_nerf_helpers import *
 from load_llff import load_llff_data
 from load_deepvoxels import load_dv_data
 from load_blender import load_blender_data
-import os
-os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
 
 tf.compat.v1.enable_eager_execution()
