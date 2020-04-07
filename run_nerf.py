@@ -1,3 +1,6 @@
+import os
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
+
 from load_blender import load_blender_data
 from load_deepvoxels import load_dv_data
 from load_llff import load_llff_data
@@ -8,9 +11,7 @@ import json
 import imageio
 import numpy as np
 import tensorflow as tf
-import os
 import sys
-os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
 tf.compat.v1.enable_eager_execution()
 
@@ -105,9 +106,6 @@ def render_rays(ray_batch,
         """
         # Function for computing density from model prediction. This value is
         # strictly between [0, 1].
-        #
-        # TODO(duckworthd): Why is 'dists' involved here? Why this activation
-        # function form instead of a sigmoid?
         def raw2alpha(raw, dists, act_fn=tf.nn.relu): return 1.0 - \
             tf.exp(-act_fn(raw) * dists)
 
@@ -126,7 +124,6 @@ def render_rays(ray_batch,
         rgb = tf.math.sigmoid(raw[..., :3])  # [N_rays, N_samples, 3]
 
         # Add noise to model's predictions for density.
-        # TODO(duckworthd): Why is this necessary?
         noise = 0.
         if raw_noise_std > 0.:
             noise = tf.random.normal(raw[..., 3].shape) * raw_noise_std
@@ -152,7 +149,6 @@ def render_rays(ray_batch,
         depth_map = tf.reduce_sum(weights * z_vals, axis=-1)
 
         # Sum of weights / expected distance.
-        # TODO(duckworthd): What is this?
         disp_map = 1./tf.maximum(1e-10, depth_map /
                                  tf.reduce_sum(weights, axis=-1))
 
@@ -188,7 +184,6 @@ def render_rays(ray_batch,
         # integration points will be used for all rays.
         z_vals = near * (1.-t_vals) + far * (t_vals)
     else:
-        # TODO(duckworthd): What is this?
         z_vals = 1./(1./near * (1.-t_vals) + 1./far * (t_vals))
     z_vals = tf.broadcast_to(z_vals, [N_rays, N_samples])
 

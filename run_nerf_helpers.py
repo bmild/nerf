@@ -119,7 +119,6 @@ def init_nerf_model(D=8, W=256, input_ch=3, input_ch_views=3, output_ch=4, skips
 
 def get_rays(H, W, focal, c2w):
     """Get ray origins, directions from a pinhole camera."""
-    # TODO(duckworthd): Understand what this code is doing...
     i, j = tf.meshgrid(tf.range(W, dtype=tf.float32),
                        tf.range(H, dtype=tf.float32), indexing='xy')
     dirs = tf.stack([(i-W*.5)/focal, -(j-H*.5)/focal, -tf.ones_like(i)], -1)
@@ -156,8 +155,6 @@ def ndc_rays(H, W, focal, near, rays_o, rays_d):
       rays_o: array of shape [batch_size, 3]. Camera origin in NDC.
       rays_d: array of shape [batch_size, 3]. Ray direction in NDC.
     """
-    # TODO(duckworthd): Understand what this code is doing...
-
     # Shift ray origins to near plane
     t = -(near + rays_o[..., 2]) / rays_d[..., 2]
     rays_o = rays_o + t[..., None] * rays_d
