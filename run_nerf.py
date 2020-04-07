@@ -1,17 +1,17 @@
+import sys
+import tensorflow as tf
+import numpy as np
+import imageio
+import json
+import random
+import time
+from run_nerf_helpers import *
+from load_llff import load_llff_data
+from load_deepvoxels import load_dv_data
+from load_blender import load_blender_data
 import os
 os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
-from load_blender import load_blender_data
-from load_deepvoxels import load_dv_data
-from load_llff import load_llff_data
-from run_nerf_helpers import *
-import time
-import random
-import json
-import imageio
-import numpy as np
-import tensorflow as tf
-import sys
 
 tf.compat.v1.enable_eager_execution()
 
@@ -44,12 +44,11 @@ def run_network(inputs, viewdirs, fn, embed_fn, embeddirs_fn, netchunk=1024*64):
     return outputs
 
 
-
-def render_rays(ray_batch, 
-                network_fn, 
+def render_rays(ray_batch,
+                network_fn,
                 network_query_fn,
-                N_samples, 
-                retraw=False, 
+                N_samples,
+                retraw=False,
                 lindisp=False,
                 perturb=0.,
                 N_importance=0,
@@ -139,8 +138,6 @@ def render_rays(ray_batch,
         # [N_rays, N_samples]
         weights = alpha * \
             tf.math.cumprod(1.-alpha + 1e-10, axis=-1, exclusive=True)
-        import ipdb
-        ipdb.set_trace()
 
         # Computed weighted color of each sample along each ray.
         rgb_map = tf.reduce_sum(
