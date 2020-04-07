@@ -44,11 +44,12 @@ def run_network(inputs, viewdirs, fn, embed_fn, embeddirs_fn, netchunk=1024*64):
     return outputs
 
 
-def render_rays(ray_batch,
-                network_fn,
+
+def render_rays(ray_batch, 
+                network_fn, 
                 network_query_fn,
-                N_samples,
-                retraw=False,
+                N_samples, 
+                retraw=False, 
                 lindisp=False,
                 perturb=0.,
                 N_importance=0,
