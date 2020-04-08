@@ -142,14 +142,13 @@ def get_rays_np(H, W, focal, c2w):
 def ndc_rays(H, W, focal, near, rays_o, rays_d):
     """Normalized device coordinate rays.
 
-    Space such that the canvas is a square with length 1 along each side.
+    Space such that the canvas is a cube with sides [-1, 1] in each axis.
 
     Args:
       H: int. Height in pixels.
       W: int. Width in pixels.
       focal: float. Focal length of pinhole camera.
-      near: float or array of shape[batch_size]. Nearest distance to consider
-        projecting from?
+      near: float or array of shape[batch_size]. Near depth bound for the scene.
       rays_o: array of shape [batch_size, 3]. Camera origin.
       rays_d: array of shape [batch_size, 3]. Ray direction.
 

@@ -68,20 +68,20 @@ def render_rays(ray_batch,
       network_query_fn: function used for passing queries to network_fn.
       N_samples: int. Number of different times to sample along each ray.
       retraw: bool. If True, include model's raw, unprocessed predictions.
-      lindisp: ...
-      perturb: float, 0 or 1. If non-zero, each ray is sampled at different
-        points in time.
+      lindisp: bool. If True, sample linearly in inverse depth rather than in depth.
+      perturb: float, 0 or 1. If non-zero, each ray is sampled at stratified
+        random points in time.
       N_importance: int. Number of additional times to sample along each ray.
         These samples are only passed to network_fine.
       network_fine: "fine" network with same spec as network_fn.
       white_bkgd: bool. If True, assume a white background.
       raw_noise_std: ...
-      verbose: bool. If True, print more debuggin info.
+      verbose: bool. If True, print more debugging info.
 
     Returns:
       rgb_map: [num_rays, 3]. Estimated RGB color of a ray. Comes from fine model.
-      disp_map: [num_rays]. Dispersion map. 1 / depth.
-      acc_map: [num_rays]. Sum of weights along each ray. Comes from fine model.
+      disp_map: [num_rays]. Disparity map. 1 / depth.
+      acc_map: [num_rays]. Accumulated opacity along each ray. Comes from fine model.
       raw: [num_rays, num_samples, 4]. Raw predictions from model.
       rgb0: See rgb_map. Output for coarse model.
       disp0: See disp_map. Output for coarse model.
@@ -100,7 +100,7 @@ def render_rays(ray_batch,
 
         Returns:
           rgb_map: [num_rays, 3]. Estimated RGB color of a ray.
-          disp_map: [num_rays]. Dispersion map. Inverse of depth map.
+          disp_map: [num_rays]. Disparity map. Inverse of depth map.
           acc_map: [num_rays]. Sum of weights along each ray.
           weights: [num_rays, num_samples]. Weights assigned to each sampled color.
           depth_map: [num_rays]. Estimated distance to object.
@@ -118,19 +118,21 @@ def render_rays(ray_batch,
             [dists, tf.broadcast_to([1e10], dists[..., :1].shape)],
             axis=-1)  # [N_rays, N_samples]
 
-        # Multiply each distance by the norm of its corresponding direction ray.
+        # Multiply each distance by the norm of its corresponding direction ray
+        # to convert to real world distance (accounts for non-unit directions).
         dists = dists * tf.linalg.norm(rays_d[..., None, :], axis=-1)
 
         # Extract RGB of each sample position along each ray.
         rgb = tf.math.sigmoid(raw[..., :3])  # [N_rays, N_samples, 3]
 
-        # Add noise to model's predictions for density.
+        # Add noise to model's predictions for density. Can be used to 
+        # regularize network during training (prevents floater artifacts).
         noise = 0.
         if raw_noise_std > 0.:
             noise = tf.random.normal(raw[..., 3].shape) * raw_noise_std
 
         # Predict density of each sample along each ray. Higher values imply
-        # higher likelihood of being reflected at this sample.
+        # higher likelihood of being absorbed at this point.
         alpha = raw2alpha(raw[..., 3] + noise, dists)  # [N_rays, N_samples]
 
         # Compute weight for RGB of each sample along each ray.  A cumprod() is
@@ -147,15 +149,14 @@ def render_rays(ray_batch,
         # Estimated depth map is expected distance.
         depth_map = tf.reduce_sum(weights * z_vals, axis=-1)
 
-        # Sum of weights / expected distance.
+        # Disparity map is inverse depth.
         disp_map = 1./tf.maximum(1e-10, depth_map /
                                  tf.reduce_sum(weights, axis=-1))
 
         # Sum of weights along each ray. This value is in [0, 1] up to numerical error.
         acc_map = tf.reduce_sum(weights, -1)
 
-        # An "empty" projection is when acc_map is near zero. If we want a
-        # white background, invert it.
+        # To composite onto a white background, use the accumulated alpha map.
         if white_bkgd:
             rgb_map = rgb_map + (1.-acc_map[..., None])
 
@@ -183,6 +184,7 @@ def render_rays(ray_batch,
         # integration points will be used for all rays.
         z_vals = near * (1.-t_vals) + far * (t_vals)
     else:
+        # Sample linearly in inverse depth (disparity).
         z_vals = 1./(1./near * (1.-t_vals) + 1./far * (t_vals))
     z_vals = tf.broadcast_to(z_vals, [N_rays, N_samples])
 
@@ -270,17 +272,18 @@ def render(H, W, focal,
         control maximum memory usage. Does not affect final results.
       rays: array of shape [2, batch_size, 3]. Ray origin and direction for
         each example in batch.
-      c2w: array of shape [3, 4]. Camera-to-world projection matrix.
+      c2w: array of shape [3, 4]. Camera-to-world transformation matrix.
       ndc: bool. If True, represent ray origin, direction in NDC coordinates.
       near: float or array of shape [batch_size]. Nearest distance for a ray.
       far: float or array of shape [batch_size]. Farthest distance for a ray.
       use_viewdirs: bool. If True, use viewing direction of a point in space in model.
-      c2w_staticcam: ...
+      c2w_staticcam: array of shape [3, 4]. If not None, use this transformation matrix for 
+       camera while using other c2w argument for viewing directions.
 
     Returns:
       rgb_map: [batch_size, 3]. Predicted RGB values for rays.
-      disp_map: [batch_size]. Dispersion map. Inverse of depth.
-      acc_map: [batch_size]. Sum of weights along a ray.
+      disp_map: [batch_size]. Disparity map. Inverse of depth.
+      acc_map: [batch_size]. Accumulated opacity (alpha) along a ray.
       extras: dict with everything returned by render_rays().
     """
 
@@ -780,7 +783,7 @@ def train():
 
         with tf.GradientTape() as tape:
 
-            # Make predictions for color, ???, sum of weights.
+            # Make predictions for color, disparity, accumulated opacity.
             rgb, disp, acc, extras = render(
                 H, W, focal, chunk=args.chunk, rays=batch_rays,
                 verbose=i < 10, retraw=True, **render_kwargs_train)
