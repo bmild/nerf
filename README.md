@@ -1,5 +1,5 @@
 # NeRF: Neural Radiance Fields
-### [Project](http://tancik.com/nerf) | [Video](https://youtu.be/JuH79E8rdKc) | [Paper](https://arxiv.org/abs/2003.08934)
+### [Project Page](http://tancik.com/nerf) | [Video](https://youtu.be/JuH79E8rdKc) | [Paper](https://arxiv.org/abs/2003.08934) | [Data](https://drive.google.com/drive/folders/128yBriW1IG_3NJ5Rp7APSTZsJqdJdfc1)
 [![Open Tiny-NeRF in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/bmild/nerf/blob/master/tiny_nerf.ipynb)<br>
 Tensorflow implementation of optimizing a neural representation for a single scene and rendering new views.<br><br>
 [NeRF: Representing Scenes as Neural Radiance Fields for View Synthesis](http://tancik.com/nerf)  
@@ -89,6 +89,9 @@ bash download_example_weights.sh
 ```
 to get a pretrained high-res NeRF for the Fern dataset. Now you can use [`render_demo.ipynb`](https://github.com/bmild/nerf/blob/master/render_demo.ipynb) to render new views.
 
+### Replicating the paper results
+
+The example config files run at lower resolutions than the quantitative/qualitative results in the paper and video. To replicate the results from the paper, start with the config files in [`paper_configs/`](https://github.com/bmild/nerf/tree/master/paper_configs). Our synthetic Blender data and LLFF scenes are hosted [here](https://drive.google.com/drive/folders/128yBriW1IG_3NJ5Rp7APSTZsJqdJdfc1) and the DeepVoxels data is hosted by Vincent Sitzmann [here](https://drive.google.com/open?id=1lUvJWB6oFtT8EQ_NzBrXnmi25BufxRfl).
 
 ### Extracting geometry from a NeRF
 
