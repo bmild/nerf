@@ -1,0 +1,19 @@
+# This replicates the paper result for "Lego"
+# when trained to 500k iters. Settings are the 
+# same for all other synthetic blender scenes.
+
+expname = blender_paper_lego
+basedir = ./logs
+datadir = ./data/nerf_synthetic/lego
+dataset_type = blender
+
+no_batching = True
+
+use_viewdirs = True
+white_bkgd = True
+lrate_decay = 500
+
+N_samples = 64
+N_importance = 128
+N_rand = 1024
+

@@ -870,6 +870,12 @@ def train():
                                                 **render_kwargs_test)
 
                 psnr = mse2psnr(img2mse(rgb, target))
+                
+                # Save out the validation image for Tensorboard-free monitoring
+                testimgdir = os.path.join(basedir, expname, 'tboard_val_imgs')
+                if i==0:
+                    os.makedirs(testimgdir, exist_ok=True)
+                imageio.imwrite(os.path.join(testimgdir, '{:06d}.png'.format(i)), to8b(rgb))
 
                 with tf.contrib.summary.record_summaries_every_n_global_steps(args.i_img):
 

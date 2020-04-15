@@ -1,0 +1,20 @@
+# This replicates the paper result for "Fern"
+# when trained to 200k iters. Settings are the 
+# same for all other LLFF-style real scenes.
+
+expname = llff_paper_fern
+basedir = ./logs
+datadir = ./data/nerf_llff_data/fern
+dataset_type = llff
+factor = 4
+llffhold = 8
+
+no_batching = False
+
+use_viewdirs = True
+lrate_decay = 250
+raw_noise_std = 1.0
+
+N_samples = 64
+N_importance = 128
+N_rand = 4096

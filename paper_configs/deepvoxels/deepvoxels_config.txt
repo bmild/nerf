@@ -1,0 +1,24 @@
+# This replicates the paper result for "Cube"
+# when trained to 200k iters. Settings are the 
+# same for all other DeepVoxels scenes.
+
+# You'll have to point the "datadir" argument
+# to wherever you've placed the downloaded
+# DeepVoxels dataset (base directory with the 
+# "train", "test", "validation" folders).
+
+expname = dvox_paper_cube
+shape = cube
+basedir = ./logs
+datadir = ./data/deepvoxels
+dataset_type = deepvoxels
+
+no_batching = True
+
+use_viewdirs = True
+white_bkgd = True
+lrate_decay = 200
+
+N_samples = 64
+N_importance = 128
+N_rand = 4096
