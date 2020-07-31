@@ -78,6 +78,7 @@ def get_embedder(multires, i=0):
 # Model architecture
 
 def init_nerf_model(D=8, W=256, input_ch=3, input_ch_views=3, output_ch=4, skips=[4], use_viewdirs=False):
+    # what is input ch views?
 
     relu = tf.keras.layers.ReLU()
     def dense(W, act=relu): return tf.keras.layers.Dense(W, activation=act)
@@ -96,11 +97,15 @@ def init_nerf_model(D=8, W=256, input_ch=3, input_ch_views=3, output_ch=4, skips
     outputs = inputs_pts
     for i in range(D):
         outputs = dense(W)(outputs)
+        # what is dense(outputs)?
+        # seems to be same as tf.compat.v1.layers.dense
+        # which is a dense layer that acts as a function that takes input and returns output
         if i in skips:
             outputs = tf.concat([inputs_pts, outputs], -1)
 
     if use_viewdirs:
         alpha_out = dense(1, act=None)(outputs)
+        # alpha is the density of target point
         bottleneck = dense(256, act=None)(outputs)
         inputs_viewdirs = tf.concat(
             [bottleneck, inputs_views], -1)  # concat viewdirs
@@ -110,6 +115,7 @@ def init_nerf_model(D=8, W=256, input_ch=3, input_ch_views=3, output_ch=4, skips
         for i in range(1):
             outputs = dense(W//2)(outputs)
         outputs = dense(3, act=None)(outputs)
+        # this outputs is r,g,b of target point
         outputs = tf.concat([outputs, alpha_out], -1)
     else:
         outputs = dense(output_ch, act=None)(outputs)

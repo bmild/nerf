@@ -19,6 +19,7 @@ tf.compat.v1.enable_eager_execution()
 
 def batchify(fn, chunk):
     """Constructs a version of 'fn' that applies to smaller batches."""
+    # chunck = batch size
     if chunk is None:
         return fn
 
@@ -35,8 +36,10 @@ def run_network(inputs, viewdirs, fn, embed_fn, embeddirs_fn, netchunk=1024*64):
     embedded = embed_fn(inputs_flat)
     if viewdirs is not None:
         input_dirs = tf.broadcast_to(viewdirs[:, None], inputs.shape)
+        # a different type of reshape
         input_dirs_flat = tf.reshape(input_dirs, [-1, input_dirs.shape[-1]])
         embedded_dirs = embeddirs_fn(input_dirs_flat)
+        # viewing direction is also embedded
         embedded = tf.concat([embedded, embedded_dirs], -1)
 
     outputs_flat = batchify(fn, netchunk)(embedded)
@@ -387,6 +390,7 @@ def create_nerf(args):
             args.multires_views, args.i_embed)
     output_ch = 4
     skips = [4]
+    # skip = skip connection?
     model = init_nerf_model(
         D=args.netdepth, W=args.netwidth,
         input_ch=input_ch, output_ch=output_ch, skips=skips,
@@ -433,6 +437,7 @@ def create_nerf(args):
     render_kwargs_test['raw_noise_std'] = 0.
 
     start = 0
+    # start is batch counter
     basedir = args.basedir
     expname = args.expname
 
@@ -686,6 +691,7 @@ def train():
             images = images[i_test]
         else:
             # Default is smoother render_poses path
+            # ?
             images = None
 
         testsavedir = os.path.join(basedir, expname, 'renderonly_{}_{:06d}'.format(
@@ -814,6 +820,7 @@ def train():
             # Compute MSE loss between predicted and true RGB.
             img_loss = img2mse(rgb, target_s)
             trans = extras['raw'][..., -1]
+            # what is trans?
             loss = img_loss
             psnr = mse2psnr(img_loss)
 
@@ -823,6 +830,7 @@ def train():
                 loss += img_loss0
                 psnr0 = mse2psnr(img_loss0)
 
+        # grad_vars = model.trainable_variables
         gradients = tape.gradient(loss, grad_vars)
         optimizer.apply_gradients(zip(gradients, grad_vars))
 
