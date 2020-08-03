@@ -12,8 +12,6 @@ from run_nerf_helpers import *
 from load_llff import load_llff_data
 from load_deepvoxels import load_dv_data
 from load_blender import load_blender_data
-
-
 tf.compat.v1.enable_eager_execution()
 
 
@@ -390,7 +388,7 @@ def create_nerf(args):
             args.multires_views, args.i_embed)
     output_ch = 4
     skips = [4]
-    # skip = skip connection?
+    # skip specifies the indices of layers that need skip connection
     model = init_nerf_model(
         D=args.netdepth, W=args.netwidth,
         input_ch=input_ch, output_ch=output_ch, skips=skips,
@@ -574,6 +572,10 @@ def config_parser():
     parser.add_argument("--i_video",   type=int, default=50000,
                         help='frequency of render_poses video saving')
 
+    # rotation equivariant option
+    parser.add_argument("--use_rotation",action='store_true',
+                        help='use rotation equivariant for training')
+
     return parser
 
 
@@ -648,6 +650,10 @@ def train():
 
     else:
         print('Unknown dataset type', args.dataset_type, 'exiting')
+        return
+
+    if args.use_rotation:
+        print("Start experimental run with rotation equivariant")
         return
 
     # Cast intrinsics to right types
