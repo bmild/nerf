@@ -629,6 +629,7 @@ def train():
         near = 2.
         far = 6.
 
+        # TODO: what is it doing? doesn't seem very important
         if args.white_bkgd:
             images = images[..., :3]*images[..., -1:] + (1.-images[..., -1:])
         else:
@@ -652,9 +653,6 @@ def train():
         print('Unknown dataset type', args.dataset_type, 'exiting')
         return
 
-    if args.use_rotation:
-        print("Start experimental run with rotation equivariant")
-        return
 
     # Cast intrinsics to right types
     H, W, focal = hwf
@@ -755,11 +753,15 @@ def train():
         print('done')
         i_batch = 0
 
-    N_iters = 1000000
+    N_iters = 200000
     print('Begin')
     print('TRAIN views are', i_train)
     print('TEST views are', i_test)
     print('VAL views are', i_val)
+
+    if args.use_rotation:
+        print("Start experimental run with rotation equivariant")
+        
 
     # Summary writers
     writer = tf.contrib.summary.create_file_writer(
@@ -770,8 +772,11 @@ def train():
         time0 = time.time()
 
         # Sample random ray batch
+        if args.use_rotation:
+            # in order to apply rotation equivariant, need to pick two images from train set
+            pass
 
-        if use_batching:
+        elif use_batching:
             # Random over all images
             batch = rays_rgb[i_batch:i_batch+N_rand]  # [B, 2+1, 3*?]
             batch = tf.transpose(batch, [1, 0, 2])
@@ -789,26 +794,32 @@ def train():
             # Random from one image
             img_i = np.random.choice(i_train)
             target = images[img_i]
-            pose = poses[img_i, :3, :4]
+            pose = poses[img_i, :3, :4] # remove last column which is always [0,0,0,1]
 
             if N_rand is not None:
                 rays_o, rays_d = get_rays(H, W, focal, pose)
                 if i < args.precrop_iters:
+                    # train on central crop
                     dH = int(H//2 * args.precrop_frac)
                     dW = int(W//2 * args.precrop_frac)
                     coords = tf.stack(tf.meshgrid(
                         tf.range(H//2 - dH, H//2 + dH), 
                         tf.range(W//2 - dW, W//2 + dW), 
                         indexing='ij'), -1)
+                    # a 2D list of coordinates
                     if i < 10:
                         print('precrop', dH, dW, coords[0,0], coords[-1,-1])
                 else:
+                    # train on any part
                     coords = tf.stack(tf.meshgrid(
                         tf.range(H), tf.range(W), indexing='ij'), -1)
+                # flatten it into a list of coordinates
                 coords = tf.reshape(coords, [-1, 2])
                 select_inds = np.random.choice(
                     coords.shape[0], size=[N_rand], replace=False)
+                # make it into proper 2d array
                 select_inds = tf.gather_nd(coords, select_inds[:, tf.newaxis])
+                # select ray stats. One ray is for one pixel
                 rays_o = tf.gather_nd(rays_o, select_inds)
                 rays_d = tf.gather_nd(rays_d, select_inds)
                 batch_rays = tf.stack([rays_o, rays_d], 0)
