@@ -78,7 +78,8 @@ def get_embedder(multires, i=0):
 # Model architecture
 
 def init_nerf_model(D=8, W=256, input_ch=3, input_ch_views=3, output_ch=4, skips=[4], use_viewdirs=False):
-    # what is input ch views?
+    # what is input ch views? -- input channel number for viewing direction
+    # cos positional encoding is also put on viewing direction as well
 
     relu = tf.keras.layers.ReLU()
     def dense(W, act=relu): return tf.keras.layers.Dense(W, activation=act)
@@ -98,8 +99,78 @@ def init_nerf_model(D=8, W=256, input_ch=3, input_ch_views=3, output_ch=4, skips
     for i in range(D):
         outputs = dense(W)(outputs)
         # what is dense(outputs)?
-        # seems to be same as tf.compat.v1.layers.dense
-        # which is a dense layer that acts as a function that takes input and returns output
+        # seems to be a dense layer that acts as a function that takes input and returns output
+        # https://keras.io/guides/functional_api/
+        if i in skips:
+            outputs = tf.concat([inputs_pts, outputs], -1)
+
+    if use_viewdirs:
+        alpha_out = dense(1, act=None)(outputs)
+        # alpha is the density of target point
+        bottleneck = dense(256, act=None)(outputs)
+        inputs_viewdirs = tf.concat(
+            [bottleneck, inputs_views], -1)  # concat viewdirs
+        outputs = inputs_viewdirs
+        # The supplement to the paper states there are 4 hidden layers here, but this is an error since
+        # the experiments were actually run with 1 hidden layer, so we will leave it as 1.
+        for i in range(1):
+            outputs = dense(W//2)(outputs)
+        outputs = dense(3, act=None)(outputs)
+        # this outputs is r,g,b of target point
+        outputs = tf.concat([outputs, alpha_out], -1)
+    else:
+        outputs = dense(output_ch, act=None)(outputs)
+
+    model = tf.keras.Model(inputs=inputs, outputs=outputs)
+    return model
+
+def init_nerf_r_model(D=8, W=256, input_ch_image=(500, 500, 3), input_ch_coord=3, input_ch_views=3, output_ch=4, skips=[4], use_viewdirs=False):
+    # what is input ch views? -- input channel number for viewing direction
+    # cos positional encoding is also put on viewing direction as well
+
+    print("Initing nerf_r model")
+
+    relu = tf.keras.layers.ReLU()
+    def dense(W, act=relu): return tf.keras.layers.Dense(W, activation=act)
+    def conv2d(filter, kernel_size, input_shape): return tf.keras.layers.Conv2D(filter, kernel_size, padding='valid', input_shape=input_shape)
+    def maxpool(pool_size): return tf.keras.layers.MaxPool2D(pool_size)
+
+    print('MODEL', input_ch_coord, input_ch_views, type(
+        input_ch_coord), type(input_ch_views), use_viewdirs)
+    input_ch_coord = int(input_ch_coord)
+    input_ch_views = int(input_ch_views)
+
+    inputs = tf.keras.Input(shape=(input_ch_coord + input_ch_views + np.prod(input_ch_image),))
+    inputs_pts, inputs_views, inputs_images = tf.split(inputs, [input_ch_coord, input_ch_views, np.prod(input_ch_image)], -1)
+    inputs_pts.set_shape([None, input_ch_coord])
+    inputs_views.set_shape([None, input_ch_views])
+    print([None] + list(input_ch_image))
+    print(inputs_images.shape)
+    inputs_images = tf.reshape(inputs_images,[-1] + list(input_ch_image))
+
+    print("The shapes are:")
+    print(inputs.shape, inputs_pts.shape, inputs_views.shape, inputs_images)
+
+    # dum conv2d
+    feature_vector = inputs_images
+    feature_vector = conv2d(32,5,input_ch_image)(feature_vector)
+    feature_vector = maxpool((4,4))(feature_vector)
+    feature_vector = conv2d(32,5,input_ch_image)(feature_vector)
+    feature_vector = maxpool((4,4))(feature_vector)
+    feature_vector = conv2d(32,5,input_ch_image)(feature_vector)
+    feature_vector = maxpool((4,4))(feature_vector)
+    feature_vector = tf.reshape(feature_vector,[-1,np.prod(feature_vector.shape[1:])])
+
+    print("feature_vector shape is:")
+    print(feature_vector.shape)
+
+    # concate feature vector with input coordinates
+    outputs = tf.concat([inputs_pts, feature_vector], -1)
+
+    print("outputs shape is:")
+    print(outputs.shape)
+    for i in range(D):
+        outputs = dense(W)(outputs)
         if i in skips:
             outputs = tf.concat([inputs_pts, outputs], -1)
 
