@@ -51,6 +51,9 @@ def run_network(inputs, input_image, viewdirs, fn, embed_fn, embeddirs_fn, netch
 
     embedded = tf.concat([embedded, np.tile(input_image, [embedded.shape[0],1])], -1)
 
+    # print("Shape of embedded:")
+    # print(embedded.shape)
+
     outputs_flat = batchify(fn, netchunk)(embedded)
     outputs = tf.reshape(outputs_flat, list(
         inputs.shape[:-1]) + [outputs_flat.shape[-1]])
@@ -731,7 +734,7 @@ def train():
             img_i, target_i = np.random.choice(i_train,2,replace=False)
             input_img = images[img_i]
             target_img = images[target_i]
-            pose = poses[target_i, :3, :4]
+            # pose = poses[target_i, :3, :4]
             # defines the transformation matrix from img_i viewpoint to target_i viewpoint
             # transformation = np.linalg.inv( poses[img_i]) @ poses[target_i]
 
@@ -741,6 +744,7 @@ def train():
             select_inds = np.random.choice(coords.shape[0], size=[N_rand], replace=False)
             select_inds = tf.gather_nd(coords, select_inds[:, tf.newaxis])
 
+            # select rays using pose of target image
             batch = tf.gather_nd(rays_rgb_by_img[target_i], select_inds) # [N_rand,3,3]
             batch_rays, target_s = batch[:,:2,:], batch[:,2,:]
             batch_rays = tf.transpose(batch_rays,[1,0,2])
