@@ -45,7 +45,7 @@ def run_network(inputs, input_image, viewdirs, fn, embed_fn, embeddirs_fn, netch
         embedded = tf.concat([embedded, embedded_dirs], -1)
 
     # flatten input image and add it to inputs
-    input_image = tf.reshape(input_image,[-1])
+    input_image = np.reshape(input_image,[-1])
     # input_image = sparse.csr_matrix(input_image)
     # input_images = np.tile(input_image, [embedded.shape[0],1])
 
@@ -353,7 +353,7 @@ def render(H, W, focal,
     return ret_list + [ret_dict]
 
 
-def render_path(render_poses, hwf, chunk, render_kwargs, gt_imgs=None, savedir=None, render_factor=0):
+def render_path(render_poses, hwf, chunk, render_kwargs, input_image=None, gt_imgs=None, savedir=None, render_factor=0):
 
     H, W, focal = hwf
 
@@ -371,7 +371,7 @@ def render_path(render_poses, hwf, chunk, render_kwargs, gt_imgs=None, savedir=N
         print(i, time.time() - t)
         t = time.time()
         rgb, disp, acc, _ = render(
-            H, W, focal, chunk=chunk, c2w=c2w[:3, :4], **render_kwargs)
+            H, W, focal, image=input_image, chunk=chunk, c2w=c2w[:3, :4], **render_kwargs)
         rgbs.append(rgb.numpy())
         disps.append(disp.numpy())
         if i == 0:
@@ -795,32 +795,32 @@ def train():
             for k in models:
                 save_weights(models[k], k, i)
 
-        if i % args.i_video == 0 and i > 0:
+        # if i % args.i_video == 0 and i > 0:
 
-            rgbs, disps = render_path(
-                render_poses, hwf, args.chunk, render_kwargs_test)
-            print('Done, saving', rgbs.shape, disps.shape)
-            moviebase = os.path.join(
-                basedir, expname, '{}_spiral_{:06d}_'.format(expname, i))
-            imageio.mimwrite(moviebase + 'rgb.mp4',
-                             to8b(rgbs), fps=30, quality=8)
-            imageio.mimwrite(moviebase + 'disp.mp4',
-                             to8b(disps / np.max(disps)), fps=30, quality=8)
+        #     rgbs, disps = render_path(
+        #         render_poses, hwf, args.chunk, render_kwargs_test, input_image=input_img)
+        #     print('Done, saving', rgbs.shape, disps.shape)
+        #     moviebase = os.path.join(
+        #         basedir, expname, '{}_spiral_{:06d}_'.format(expname, i))
+        #     imageio.mimwrite(moviebase + 'rgb.mp4',
+        #                      to8b(rgbs), fps=30, quality=8)
+        #     imageio.mimwrite(moviebase + 'disp.mp4',
+        #                      to8b(disps / np.max(disps)), fps=30, quality=8)
 
-            if args.use_viewdirs:
-                render_kwargs_test['c2w_staticcam'] = render_poses[0][:3, :4]
-                rgbs_still, _ = render_path(
-                    render_poses, hwf, args.chunk, render_kwargs_test)
-                render_kwargs_test['c2w_staticcam'] = None
-                imageio.mimwrite(moviebase + 'rgb_still.mp4',
-                                 to8b(rgbs_still), fps=30, quality=8)
+        #     if args.use_viewdirs:
+        #         render_kwargs_test['c2w_staticcam'] = render_poses[0][:3, :4]
+        #         rgbs_still, _ = render_path(
+        #             render_poses, hwf, args.chunk, render_kwargs_test, input_image=input_img)
+        #         render_kwargs_test['c2w_staticcam'] = None
+        #         imageio.mimwrite(moviebase + 'rgb_still.mp4',
+        #                          to8b(rgbs_still), fps=30, quality=8)
 
         if i % args.i_testset == 0 and i > 0:
             testsavedir = os.path.join(
                 basedir, expname, 'testset_{:06d}'.format(i))
             os.makedirs(testsavedir, exist_ok=True)
             print('test poses shape', poses[i_test].shape)
-            render_path(poses[i_test], hwf, args.chunk, render_kwargs_test,
+            render_path(poses[i_test], hwf, args.chunk, render_kwargs_test, input_image=input_img,
                         gt_imgs=images[i_test], savedir=testsavedir)
             print('Saved test set')
 
@@ -842,7 +842,7 @@ def train():
                 target = images[img_i]
                 pose = poses[img_i, :3, :4]
 
-                rgb, disp, acc, extras = render(H, W, focal, chunk=args.chunk, c2w=pose,
+                rgb, disp, acc, extras = render(H, W, focal, chunk=args.chunk, c2w=pose, image=images[img_i],
                                                 **render_kwargs_test)
 
                 psnr = mse2psnr(img2mse(rgb, target))

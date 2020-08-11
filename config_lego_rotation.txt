@@ -13,8 +13,12 @@ use_viewdirs = True
 white_bkgd = True
 
 N_rand = 8
-netchunk = 8
+chunk = 64
+netchunk = 64
 
 use_rotation = True
 
 random_seed = 42
+
+i_video = 50000000
+i_weights = 250
