@@ -46,8 +46,6 @@ def run_network(inputs, input_image, viewdirs, fn, embed_fn, embeddirs_fn, netch
 
     # flatten input image and add it to inputs
     input_image = np.reshape(input_image,[-1])
-    # input_image = sparse.csr_matrix(input_image)
-    # input_images = np.tile(input_image, [embedded.shape[0],1])
 
     embedded = tf.concat([embedded, np.tile(input_image, [embedded.shape[0],1])], -1)
 
@@ -224,26 +222,26 @@ def render_rays(ray_batch,
         raw, z_vals, rays_d)
 
     # TODO: add support for fine network
-    if N_importance > 0:
-        rgb_map_0, disp_map_0, acc_map_0 = rgb_map, disp_map, acc_map
+    # if N_importance > 0:
+    #     rgb_map_0, disp_map_0, acc_map_0 = rgb_map, disp_map, acc_map
 
-        # Obtain additional integration times to evaluate based on the weights
-        # assigned to colors in the coarse model.
-        z_vals_mid = .5 * (z_vals[..., 1:] + z_vals[..., :-1])
-        z_samples = sample_pdf(
-            z_vals_mid, weights[..., 1:-1], N_importance, det=(perturb == 0.))
-        z_samples = tf.stop_gradient(z_samples)
+    #     # Obtain additional integration times to evaluate based on the weights
+    #     # assigned to colors in the coarse model.
+    #     z_vals_mid = .5 * (z_vals[..., 1:] + z_vals[..., :-1])
+    #     z_samples = sample_pdf(
+    #         z_vals_mid, weights[..., 1:-1], N_importance, det=(perturb == 0.))
+    #     z_samples = tf.stop_gradient(z_samples)
 
-        # Obtain all points to evaluate color, density at.
-        z_vals = tf.sort(tf.concat([z_vals, z_samples], -1), -1)
-        pts = rays_o[..., None, :] + rays_d[..., None, :] * \
-            z_vals[..., :, None]  # [N_rays, N_samples + N_importance, 3]
+    #     # Obtain all points to evaluate color, density at.
+    #     z_vals = tf.sort(tf.concat([z_vals, z_samples], -1), -1)
+    #     pts = rays_o[..., None, :] + rays_d[..., None, :] * \
+    #         z_vals[..., :, None]  # [N_rays, N_samples + N_importance, 3]
 
-        # Make predictions with network_fine.
-        run_fn = network_fn if network_fine is None else network_fine
-        raw = network_query_fn(pts, viewdirs, run_fn)
-        rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(
-            raw, z_vals, rays_d)
+    #     # Make predictions with network_fine.
+    #     run_fn = network_fn if network_fine is None else network_fine
+    #     raw = network_query_fn(pts, viewdirs, run_fn)
+    #     rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(
+    #         raw, z_vals, rays_d)
 
     ret = {'rgb_map': rgb_map, 'disp_map': disp_map, 'acc_map': acc_map}
     if retraw:
@@ -413,13 +411,13 @@ def create_nerf(args, hwf):
 
     # TODO: add support for fine model
     model_fine = None
-    if args.N_importance > 0:
-        model_fine = init_nerf_r_model(
-            D=args.netdepth, W=args.netwidth, input_ch_image= (hwf[0],hwf[1],3),
-            input_ch_coord=input_ch, output_ch=output_ch, skips=skips,
-            input_ch_views=input_ch_views, use_viewdirs=args.use_viewdirs)
-        grad_vars += model_fine.trainable_variables
-        models['model_fine'] = model_fine
+    # if args.N_importance > 0:
+    #     model_fine = init_nerf_r_model(
+    #         D=args.netdepth, W=args.netwidth, input_ch_image= (hwf[0],hwf[1],3),
+    #         input_ch_coord=input_ch, output_ch=output_ch, skips=skips,
+    #         input_ch_views=input_ch_views, use_viewdirs=args.use_viewdirs)
+    #     grad_vars += model_fine.trainable_variables
+    #     models['model_fine'] = model_fine
 
     def network_query_fn(inputs, input_image, viewdirs, network_fn): return run_network(
         inputs, input_image, viewdirs, network_fn,
@@ -714,9 +712,11 @@ def train():
     print('VAL views are', i_val)
 
     if args.use_rotation:
-        rays_rgb = np.reshape(rays_rgb,[-1,H,W,3,3])
         print("Start experimental run with rotation equivariant")
+    else:
+        print("Not using rotation")
         
+    rays_rgb = np.reshape(rays_rgb,[-1,H,W,3,3])
 
     # Summary writers
     writer = tf.contrib.summary.create_file_writer(
@@ -750,8 +750,24 @@ def train():
             batch_rays = tf.transpose(batch_rays,[1,0,2])
 
         else:
-            print("Not expected!")
-            return
+            # don't use rotation, but still input image + coordinates
+            img_i = np.random.choice(i_train,1)[0]
+            input_img = images[img_i]
+            target_img = images[img_i]
+            # pose = poses[target_i, :3, :4]
+            # defines the transformation matrix from img_i viewpoint to target_i viewpoint
+            # transformation = np.linalg.inv( poses[img_i]) @ poses[target_i]
+
+            # select ray indices for training
+            coords = tf.stack(tf.meshgrid(tf.range(H), tf.range(W), indexing='ij'), -1)
+            coords = tf.reshape(coords, [-1, 2])
+            select_inds = np.random.choice(coords.shape[0], size=[N_rand], replace=False)
+            select_inds = tf.gather_nd(coords, select_inds[:, tf.newaxis])
+
+            # select rays using pose of target image
+            batch = tf.gather_nd(rays_rgb[img_i], select_inds) # [N_rand,3,3]
+            batch_rays, target_s = batch[:,:2,:], batch[:,2,:]
+            batch_rays = tf.transpose(batch_rays,[1,0,2])
 
         #####  Core optimization loop  #####
 
@@ -794,26 +810,6 @@ def train():
         if i % args.i_weights == 0:
             for k in models:
                 save_weights(models[k], k, i)
-
-        # if i % args.i_video == 0 and i > 0:
-
-        #     rgbs, disps = render_path(
-        #         render_poses, hwf, args.chunk, render_kwargs_test, input_image=input_img)
-        #     print('Done, saving', rgbs.shape, disps.shape)
-        #     moviebase = os.path.join(
-        #         basedir, expname, '{}_spiral_{:06d}_'.format(expname, i))
-        #     imageio.mimwrite(moviebase + 'rgb.mp4',
-        #                      to8b(rgbs), fps=30, quality=8)
-        #     imageio.mimwrite(moviebase + 'disp.mp4',
-        #                      to8b(disps / np.max(disps)), fps=30, quality=8)
-
-        #     if args.use_viewdirs:
-        #         render_kwargs_test['c2w_staticcam'] = render_poses[0][:3, :4]
-        #         rgbs_still, _ = render_path(
-        #             render_poses, hwf, args.chunk, render_kwargs_test, input_image=input_img)
-        #         render_kwargs_test['c2w_staticcam'] = None
-        #         imageio.mimwrite(moviebase + 'rgb_still.mp4',
-        #                          to8b(rgbs_still), fps=30, quality=8)
 
         if i % args.i_testset == 0 and i > 0:
             testsavedir = os.path.join(

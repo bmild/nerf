@@ -124,7 +124,7 @@ def init_nerf_model(D=8, W=256, input_ch=3, input_ch_views=3, output_ch=4, skips
     model = tf.keras.Model(inputs=inputs, outputs=outputs)
     return model
 
-def init_nerf_r_model(D=8, W=256, input_ch_image=(500, 500, 3), input_ch_coord=3, input_ch_views=3, output_ch=4, skips=[4], use_viewdirs=False):
+def init_nerf_r_model(D=8, W=256, input_ch_image=(400, 400, 3), input_ch_coord=3, input_ch_views=3, output_ch=4, skips=[4], use_viewdirs=False):
     # what is input ch views? -- input channel number for viewing direction
     # cos positional encoding is also put on viewing direction as well
 
@@ -151,21 +151,22 @@ def init_nerf_r_model(D=8, W=256, input_ch_image=(500, 500, 3), input_ch_coord=3
     print("The shapes are:")
     print(inputs.shape, inputs_pts.shape, inputs_views.shape, inputs_images)
 
-    # dum conv2d
+    # # dum conv2d
     feature_vector = inputs_images
-    feature_vector = conv2d(32,5,input_ch_image)(feature_vector)
-    feature_vector = maxpool((4,4))(feature_vector)
-    feature_vector = conv2d(32,5,input_ch_image)(feature_vector)
-    feature_vector = maxpool((4,4))(feature_vector)
-    feature_vector = conv2d(32,5,input_ch_image)(feature_vector)
-    feature_vector = maxpool((4,4))(feature_vector)
-    feature_vector = tf.reshape(feature_vector,[-1,np.prod(feature_vector.shape[1:])])
+    # feature_vector = conv2d(32,5,input_ch_image)(feature_vector)
+    # feature_vector = maxpool((4,4))(feature_vector)
+    # feature_vector = conv2d(32,5,input_ch_image)(feature_vector)
+    # feature_vector = maxpool((4,4))(feature_vector)
+    # feature_vector = conv2d(32,5,input_ch_image)(feature_vector)
+    # feature_vector = maxpool((4,4))(feature_vector)
+    # feature_vector = tf.reshape(feature_vector,[-1,np.prod(feature_vector.shape[1:])])
 
-    print("feature_vector shape is:")
-    print(feature_vector.shape)
+    # print("feature_vector shape is:")
+    # print(feature_vector.shape)
 
     # concate feature vector with input coordinates
-    outputs = tf.concat([inputs_pts, feature_vector], -1)
+    # outputs = tf.concat([inputs_pts, feature_vector], -1)
+    outputs = inputs_pts
 
     print("outputs shape is:")
     print(outputs.shape)

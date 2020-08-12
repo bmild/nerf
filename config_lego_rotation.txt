@@ -1,4 +1,4 @@
-expname = lego_rotate_quater
+expname = lego_quater_r
 basedir = ./logs
 datadir = ./data/nerf_synthetic/lego
 dataset_type = blender
@@ -14,12 +14,10 @@ use_viewdirs = True
 white_bkgd = True
 
 N_rand = 8
-chunk = 32
-netchunk = 32
-
-use_rotation = True
+chunk = 64
+netchunk = 128
 
 random_seed = 42
 
 i_video = 50000000
-i_weights = 500
+i_weights = 499
