@@ -45,7 +45,7 @@ def pose_spherical(theta, phi, radius):
     
 
 
-def load_blender_data(basedir, half_res=False, testskip=1):
+def load_blender_data(basedir, half_res=False, testskip=1, quater_res=False):
     splits = ['train', 'val', 'test']
     metas = {}
     for s in splits:
@@ -85,7 +85,12 @@ def load_blender_data(basedir, half_res=False, testskip=1):
     
     render_poses = tf.stack([pose_spherical(angle, -30.0, 4.0) for angle in np.linspace(-180,180,40+1)[:-1]],0)
     
-    if half_res:
+    if quater_res:
+        imgs = tf.image.resize_area(imgs, [200, 200]).numpy()
+        H = H//4
+        W = W//4
+        focal = focal/4.
+    elif half_res:
         imgs = tf.image.resize_area(imgs, [400, 400]).numpy()
         H = H//2
         W = W//2

@@ -563,6 +563,8 @@ def config_parser():
                         help='set to render synthetic data on a white bkgd (always use for dvoxels)')
     parser.add_argument("--half_res", action='store_true',
                         help='load blender synthetic data at 400x400 instead of 800x800')
+    parser.add_argument("--quater_res", action='store_true',
+                        help='load blender synthetic data at 400x400 instead of 800x800')
 
     # llff flags
     parser.add_argument("--factor", type=int, default=8,
@@ -609,7 +611,7 @@ def train():
 
     if args.dataset_type == 'blender':
         images, poses, render_poses, hwf, i_split = load_blender_data(
-            args.datadir, args.half_res, args.testskip)
+            args.datadir, args.half_res, args.testskip, args.quater_res)
         print('Loaded blender', images.shape,
               render_poses.shape, hwf, args.datadir)
         i_train, i_val, i_test = i_split
@@ -712,6 +714,7 @@ def train():
     print('VAL views are', i_val)
 
     if args.use_rotation:
+        rays_rgb = np.reshape(rays_rgb,[-1,H,W,3,3])
         print("Start experimental run with rotation equivariant")
         
 
@@ -727,9 +730,6 @@ def train():
         if args.use_rotation:
             # in order to apply rotation equivariant, need to pick two images from train set
             # if training with multiple objects, this part of code needs to be further modifed
-            rays_rgb_by_img = np.reshape(rays_rgb,[-1,H,W,3,3])
-            # print("rays_rgb after reshape:")
-            # print(rays_rgb.shape)
 
             img_i, target_i = np.random.choice(i_train,2,replace=False)
             input_img = images[img_i]
@@ -745,7 +745,7 @@ def train():
             select_inds = tf.gather_nd(coords, select_inds[:, tf.newaxis])
 
             # select rays using pose of target image
-            batch = tf.gather_nd(rays_rgb_by_img[target_i], select_inds) # [N_rand,3,3]
+            batch = tf.gather_nd(rays_rgb[target_i], select_inds) # [N_rand,3,3]
             batch_rays, target_s = batch[:,:2,:], batch[:,2,:]
             batch_rays = tf.transpose(batch_rays,[1,0,2])
 
