@@ -1,4 +1,4 @@
-expname = lego_quater_test
+expname = lego_vgg16
 basedir = ./logs
 datadir = ./data/nerf_synthetic/lego
 dataset_type = blender
@@ -15,7 +15,7 @@ white_bkgd = True
 
 N_rand = 8
 chunk = 128
-netchunk = 128
+netchunk = 1
 
 random_seed = 42
 

@@ -1,0 +1,15 @@
+# To run: conda env create -f environment.yml
+name: nerf-profiler
+channels:
+    - conda-forge
+dependencies:
+    - python=3.7
+    - pip
+    - cudatoolkit=10.1
+    - tensorflow-gpu==2.2.0
+    - numpy
+    - matplotlib
+    - imageio
+    - imageio-ffmpeg
+    - configargparse
+    - imagemagick
