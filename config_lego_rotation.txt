@@ -1,10 +1,10 @@
-expname = lego_quater_r
+expname = lego_quater_test
 basedir = ./logs
 datadir = ./data/nerf_synthetic/lego
 dataset_type = blender
 
 half_res = True
-quater_res = True
+quarter_res = True
 
 N_samples = 32
 N_importance = 0
@@ -14,10 +14,10 @@ use_viewdirs = True
 white_bkgd = True
 
 N_rand = 8
-chunk = 64
+chunk = 128
 netchunk = 128
 
 random_seed = 42
 
 i_video = 50000000
-i_weights = 499
+i_weights = 500

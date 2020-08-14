@@ -6,3 +6,5 @@ model = init_nerf_r_model(
         input_ch_views=30, use_viewdirs=True)
 
 print(model.summary())
+
+print(model.trainable_variables)

@@ -153,16 +153,12 @@ def init_nerf_r_model(D=8, W=256, input_ch_image=(400, 400, 3), input_ch_coord=3
 
     # # dum conv2d
     feature_vector = inputs_images
-    # feature_vector = conv2d(32,5,input_ch_image)(feature_vector)
-    # feature_vector = maxpool((4,4))(feature_vector)
-    # feature_vector = conv2d(32,5,input_ch_image)(feature_vector)
-    # feature_vector = maxpool((4,4))(feature_vector)
-    # feature_vector = conv2d(32,5,input_ch_image)(feature_vector)
-    # feature_vector = maxpool((4,4))(feature_vector)
-    # feature_vector = tf.reshape(feature_vector,[-1,np.prod(feature_vector.shape[1:])])
+    feature_vector = conv2d(32,5,input_ch_image)(feature_vector)
+    feature_vector = maxpool((64,64))(feature_vector)
+    feature_vector = tf.reshape(feature_vector,[-1,np.prod(feature_vector.shape[1:])])
 
-    # print("feature_vector shape is:")
-    # print(feature_vector.shape)
+    print("feature_vector shape is:")
+    print(feature_vector.shape)
 
     # concate feature vector with input coordinates
     # outputs = tf.concat([inputs_pts, feature_vector], -1)

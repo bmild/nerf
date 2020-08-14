@@ -561,7 +561,7 @@ def config_parser():
                         help='set to render synthetic data on a white bkgd (always use for dvoxels)')
     parser.add_argument("--half_res", action='store_true',
                         help='load blender synthetic data at 400x400 instead of 800x800')
-    parser.add_argument("--quater_res", action='store_true',
+    parser.add_argument("--quarter_res", action='store_true',
                         help='load blender synthetic data at 400x400 instead of 800x800')
 
     # llff flags
@@ -609,7 +609,7 @@ def train():
 
     if args.dataset_type == 'blender':
         images, poses, render_poses, hwf, i_split = load_blender_data(
-            args.datadir, args.half_res, args.testskip, args.quater_res)
+            args.datadir, args.half_res, args.testskip, args.quarter_res)
         print('Loaded blender', images.shape,
               render_poses.shape, hwf, args.datadir)
         i_train, i_val, i_test = i_split
@@ -793,6 +793,10 @@ def train():
 
         # grad_vars = model.trainable_variables
         gradients = tape.gradient(loss, grad_vars)
+
+        print(f"loss is {loss}")
+        # print(grad_vars)
+
         optimizer.apply_gradients(zip(gradients, grad_vars))
 
         dt = time.time()-time0
