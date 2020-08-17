@@ -794,7 +794,7 @@ def train():
         # grad_vars = model.trainable_variables
         gradients = tape.gradient(loss, grad_vars)
 
-        print(f"loss is {loss}")
+        # print(f"loss is {loss}")
         # print(grad_vars)
 
         optimizer.apply_gradients(zip(gradients, grad_vars))

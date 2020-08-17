@@ -152,10 +152,13 @@ def init_nerf_r_model(D=8, W=256, input_ch_image=(400, 400, 3), input_ch_coord=3
     print("The shapes are:")
     print(inputs.shape, inputs_pts.shape, inputs_views.shape, inputs_images)
 
+    # feature_vector = inputs_images
+    # feature_vector = conv2d(32,5,input_ch_image)(feature_vector)
+    # feature_vector = maxpool((64,64))(feature_vector)
+
     # vgg16
-    feature_vector = tf.keras.applications.vgg16.preprocess_input(inputs_images)
-    feature_vector = tf.keras.applications.VGG16(include_top=False, input_shape=input_ch_image)(feature_vector)
-    # feature_vector = maxpool(6)(feature_vector)
+    feature_vector = tf.keras.applications.inception_resnet_v2.preprocess_input(inputs_images)
+    feature_vector = tf.keras.applications.InceptionResNetV2(include_top=False, input_shape=input_ch_image)(feature_vector)
     feature_vector = tf.reshape(feature_vector,[-1,np.prod(feature_vector.shape[1:])])
 
     print("feature_vector shape is:")
