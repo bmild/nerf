@@ -124,16 +124,14 @@ def init_nerf_model(D=8, W=256, input_ch=3, input_ch_views=3, output_ch=4, skips
     model = tf.keras.Model(inputs=inputs, outputs=outputs)
     return model
 
-def init_nerf_r_model(D=8, W=256, input_ch_image=(400, 400, 3), input_ch_coord=3, input_ch_views=3, output_ch=4, skips=[4], use_viewdirs=False):
+def init_nerf_res_model(D=8, W=256, input_ch_image=(400, 400, 3), input_ch_coord=3, input_ch_views=3, output_ch=4, skips=[4], use_viewdirs=False):
     # what is input ch views? -- input channel number for viewing direction
     # cos positional encoding is also put on viewing direction as well
 
-    print("Initing nerf_r model")
+    print("Initing nerf_res model")
 
     relu = tf.keras.layers.ReLU()
     def dense(W, act=relu): return tf.keras.layers.Dense(W, activation=act)
-    def conv2d(filter, kernel_size, input_shape): return tf.keras.layers.Conv2D(filter, kernel_size, padding='valid', input_shape=input_shape)
-    def maxpool(pool_size): return tf.keras.layers.MaxPool2D(pool_size)
 
     print('MODEL', input_ch_coord, input_ch_views, type(
         input_ch_coord), type(input_ch_views), use_viewdirs)
@@ -156,9 +154,11 @@ def init_nerf_r_model(D=8, W=256, input_ch_image=(400, 400, 3), input_ch_coord=3
     # feature_vector = conv2d(32,5,input_ch_image)(feature_vector)
     # feature_vector = maxpool((64,64))(feature_vector)
 
-    # vgg16
+    # inception res v2
     feature_vector = tf.keras.applications.inception_resnet_v2.preprocess_input(inputs_images)
-    feature_vector = tf.keras.applications.InceptionResNetV2(include_top=False, input_shape=input_ch_image)(feature_vector)
+    pretrained_model = tf.keras.applications.InceptionResNetV2(include_top=False, input_shape=input_ch_image)
+    pretrained_model.trainable = False
+    feature_vector = pretrained_model(feature_vector)
     feature_vector = tf.reshape(feature_vector,[-1,np.prod(feature_vector.shape[1:])])
 
     print("feature_vector shape is:")
@@ -182,8 +182,6 @@ def init_nerf_r_model(D=8, W=256, input_ch_image=(400, 400, 3), input_ch_coord=3
         inputs_viewdirs = tf.concat(
             [bottleneck, inputs_views], -1)  # concat viewdirs
         outputs = inputs_viewdirs
-        # The supplement to the paper states there are 4 hidden layers here, but this is an error since
-        # the experiments were actually run with 1 hidden layer, so we will leave it as 1.
         for i in range(1):
             outputs = dense(W//2)(outputs)
         outputs = dense(3, act=None)(outputs)
@@ -194,6 +192,82 @@ def init_nerf_r_model(D=8, W=256, input_ch_image=(400, 400, 3), input_ch_coord=3
 
     model = tf.keras.Model(inputs=inputs, outputs=outputs)
     return model
+
+def init_nerf_r_models(D=8, W=256, D_rotation=3, input_ch_image=(400, 400, 3), input_ch_pose=(3,4), input_ch_coord=3, input_ch_views=3, output_ch=4, skips=[4], use_viewdirs=False):
+    # what is input ch views? -- input channel number for viewing direction
+    # cos positional encoding is also put on viewing direction as well
+
+    print("Initing nerf_r models")
+
+    relu = tf.keras.layers.ReLU()
+    def dense(W, act=relu): return tf.keras.layers.Dense(W, activation=act)
+    def conv2d(filter, kernel_size, input_shape): return tf.keras.layers.Conv2D(filter, kernel_size, padding='valid', input_shape=input_shape)
+    def maxpool(pool_size): return tf.keras.layers.MaxPool2D(pool_size)
+
+    input_ch_coord = int(input_ch_coord)
+    input_ch_views = int(input_ch_views)
+
+    # first model: inception + MLP as encoder
+    inputs_encoder = tf.keras.Input(shape=(np.prod(input_ch_image) + np.prod(input_ch_pose),))
+    inputs_images, input_poses = tf.split(inputs_encoder, [np.prod(input_ch_image), np.prod(input_ch_pose)], -1)
+    inputs_images = tf.reshape(inputs_images,[-1] + list(input_ch_image))
+    input_poses.set_shape([None, np.prod(input_ch_pose)])
+
+    # inception res v2
+    feature_vector = tf.keras.applications.inception_resnet_v2.preprocess_input(inputs_images)
+    pretrained_model = tf.keras.applications.InceptionResNetV2(include_top=False, input_shape=input_ch_image)
+    pretrained_model.trainable = False
+    feature_vector = pretrained_model(feature_vector)
+    feature_vector = tf.reshape(feature_vector,[-1,np.prod(feature_vector.shape[1:])])
+    feature_original = tf.identity(feature_vector)
+
+    feature_len = feature_vector.shape[1]
+    print("feature_vector shape is:")
+    print(feature_vector.shape)
+
+    # apply MLP to do rotation
+    feature_vector = tf.concat([feature_vector,input_poses], -1)
+    for i in range(D_rotation):
+        feature_vector = dense(W)(feature_vector)
+    feature_rotated = dense(feature_len, act=None)(feature_vector)
+    outputs_encoder = tf.concat([feature_original, feature_rotated], -1)
+
+    model_encoder = tf.keras.Model(inputs=inputs_encoder, outputs=outputs_encoder)
+
+
+    # MLP for predicting rbg and density
+    inputs = tf.keras.Input(shape=(input_ch_coord + input_ch_views + feature_len,))
+    inputs_pts, inputs_views, features = tf.split(inputs, [input_ch_coord, input_ch_views, feature_len], -1)
+    inputs_pts.set_shape([None, input_ch_coord])
+    inputs_views.set_shape([None, input_ch_views])
+    features.set_shape([None, feature_len])
+
+    # concate feature vector with input coordinates
+    outputs = tf.concat([inputs_pts, features], -1)
+
+    for i in range(D):
+        outputs = dense(W)(outputs)
+        if i in skips:
+            outputs = tf.concat([inputs_pts, outputs], -1)
+
+    if use_viewdirs:
+        alpha_out = dense(1, act=None)(outputs)
+        # alpha is the density of target point
+        bottleneck = dense(256, act=None)(outputs)
+        inputs_viewdirs = tf.concat(
+            [bottleneck, inputs_views], -1)  # concat viewdirs
+        outputs = inputs_viewdirs
+        for i in range(1):
+            outputs = dense(W//2)(outputs)
+        outputs = dense(3, act=None)(outputs)
+        # this outputs is r,g,b of target point
+        outputs = tf.concat([outputs, alpha_out], -1)
+    else:
+        print("Error: must use viewdirs for nerf_r model!")
+        return
+    model_decoder = tf.keras.Model(inputs=inputs, outputs=outputs)
+
+    return [model_encoder, model_decoder]
 
 
 # Ray helpers

@@ -30,7 +30,22 @@ def batchify(fn, chunk):
     return ret
 
 
-def run_network(inputs, input_image, viewdirs, fn, embed_fn, embeddirs_fn, netchunk=1024*64):
+def compute_features(input_image, input_pose, encoder):
+    # flatten input image
+    input_image = np.reshape(input_image,[1, -1])
+    input_image = tf.cast(input_image, tf.float32)
+
+    # flatten input pose and add it to inputs
+    input_pose = np.reshape(input_pose,[1, -1])
+    input_pose = tf.cast(input_pose, tf.float32)
+
+    inputs = tf.concat([input_image, input_pose], -1)
+    outputs_flat = encoder(inputs)
+    feature_original, feature_rotated = tf.split(outputs_flat,[outputs_flat.shape[1]//2,-1], -1)
+    return feature_original, feature_rotated
+
+
+def run_network(inputs, input_image, input_pose, viewdirs, network_fn, embed_fn, embeddirs_fn, netchunk=1024*64):
     """Prepares inputs and applies network 'fn'."""
 
     inputs_flat = tf.reshape(inputs, [-1, inputs.shape[-1]])
@@ -44,22 +59,22 @@ def run_network(inputs, input_image, viewdirs, fn, embed_fn, embeddirs_fn, netch
         # viewing direction is also embedded
         embedded = tf.concat([embedded, embedded_dirs], -1)
 
-    # flatten input image and add it to inputs
-    input_image = np.reshape(input_image,[-1])
 
-    embedded = tf.concat([embedded, np.tile(input_image, [embedded.shape[0],1])], -1)
+    _ , feature_rotated = compute_features(input_image, input_pose, network_fn['encoder'])
+    embedded = tf.concat([embedded, np.tile(feature_rotated, [embedded.shape[0],1])], -1)
 
     # print("Shape of embedded:")
     # print(embedded.shape)
 
-    outputs_flat = batchify(fn, netchunk)(embedded)
+    outputs_flat = batchify(network_fn['decoder'], netchunk)(embedded)
     outputs = tf.reshape(outputs_flat, list(
         inputs.shape[:-1]) + [outputs_flat.shape[-1]])
-    return outputs
+    return outputs, feature_rotated
 
 
 def render_rays(ray_batch,
                 input_image,
+                input_pose,
                 network_fn,
                 network_query_fn,
                 N_samples,
@@ -217,7 +232,7 @@ def render_rays(ray_batch,
         z_vals[..., :, None]  # [N_rays, N_samples, 3
 
     # Evaluate model at each point.
-    raw = network_query_fn(pts, input_image, viewdirs, network_fn)  # [N_rays, N_samples, 4]
+    raw, feature = network_query_fn(pts, input_image, input_pose, viewdirs, network_fn)  # [N_rays, N_samples, 4]
     rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(
         raw, z_vals, rays_d)
 
@@ -243,14 +258,14 @@ def render_rays(ray_batch,
     #     rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(
     #         raw, z_vals, rays_d)
 
-    ret = {'rgb_map': rgb_map, 'disp_map': disp_map, 'acc_map': acc_map}
+    ret = {'rgb_map': rgb_map, 'disp_map': disp_map, 'acc_map': acc_map, 'feature': feature}
     if retraw:
         ret['raw'] = raw
-    if N_importance > 0:
-        ret['rgb0'] = rgb_map_0
-        ret['disp0'] = disp_map_0
-        ret['acc0'] = acc_map_0
-        ret['z_std'] = tf.math.reduce_std(z_samples, -1)  # [N_rays]
+    # if N_importance > 0:
+    #     ret['rgb0'] = rgb_map_0
+    #     ret['disp0'] = disp_map_0
+    #     ret['acc0'] = acc_map_0
+    #     ret['z_std'] = tf.math.reduce_std(z_samples, -1)  # [N_rays]
 
     for k in ret:
         tf.debugging.check_numerics(ret[k], 'output {}'.format(k))
@@ -258,11 +273,11 @@ def render_rays(ray_batch,
     return ret
 
 
-def batchify_rays(rays_flat, image, chunk=1024*32, **kwargs):
+def batchify_rays(rays_flat, image, pose, chunk=1024*32, **kwargs):
     """Render rays in smaller minibatches to avoid OOM."""
     all_ret = {}
     for i in range(0, rays_flat.shape[0], chunk):
-        ret = render_rays(rays_flat[i:i+chunk], image, **kwargs)
+        ret = render_rays(rays_flat[i:i+chunk], image, pose, **kwargs)
         for k in ret:
             if k not in all_ret:
                 all_ret[k] = []
@@ -273,7 +288,7 @@ def batchify_rays(rays_flat, image, chunk=1024*32, **kwargs):
 
 
 def render(H, W, focal,
-           chunk=1024*32, rays=None, image=None, c2w=None, ndc=True,
+           chunk=1024*32, rays=None, image=None, pose=None, c2w=None, ndc=True,
            near=0., far=1.,
            use_viewdirs=False, c2w_staticcam=None,
            **kwargs):
@@ -340,12 +355,13 @@ def render(H, W, focal,
         rays = tf.concat([rays, viewdirs], axis=-1)
 
     # Render and reshape
-    all_ret = batchify_rays(rays, image, chunk, **kwargs)
+    all_ret = batchify_rays(rays, image, pose, chunk, **kwargs)
     for k in all_ret:
-        k_sh = list(sh[:-1]) + list(all_ret[k].shape[1:])
-        all_ret[k] = tf.reshape(all_ret[k], k_sh)
+        if k != 'feature':
+            k_sh = list(sh[:-1]) + list(all_ret[k].shape[1:])
+            all_ret[k] = tf.reshape(all_ret[k], k_sh)
 
-    k_extract = ['rgb_map', 'disp_map', 'acc_map']
+    k_extract = ['rgb_map', 'disp_map', 'acc_map', 'feature']
     ret_list = [all_ret[k] for k in k_extract]
     ret_dict = {k: all_ret[k] for k in all_ret if k not in k_extract}
     return ret_list + [ret_dict]
@@ -368,7 +384,7 @@ def render_path(render_poses, hwf, chunk, render_kwargs, input_image=None, gt_im
     for i, c2w in enumerate(render_poses):
         print(i, time.time() - t)
         t = time.time()
-        rgb, disp, acc, _ = render(
+        rgb, disp, acc, feature, _ = render(
             H, W, focal, image=input_image, chunk=chunk, c2w=c2w[:3, :4], **render_kwargs)
         rgbs.append(rgb.numpy())
         disps.append(disp.numpy())
@@ -402,12 +418,11 @@ def create_nerf(args, hwf):
     output_ch = 4
     skips = [4]
     # skip specifies the indices of layers that need skip connection
-    model = init_nerf_r_model(
+    encoder, decoder = init_nerf_r_models(
         D=args.netdepth, W=args.netwidth, input_ch_image= (hwf[0],hwf[1],3),
         input_ch_coord=input_ch, output_ch=output_ch, skips=skips,
         input_ch_views=input_ch_views, use_viewdirs=args.use_viewdirs)
-    grad_vars = model.trainable_variables
-    models = {'model': model}
+    models = {'encoder': encoder, 'decoder': decoder}
 
     # TODO: add support for fine model
     model_fine = None
@@ -419,8 +434,8 @@ def create_nerf(args, hwf):
     #     grad_vars += model_fine.trainable_variables
     #     models['model_fine'] = model_fine
 
-    def network_query_fn(inputs, input_image, viewdirs, network_fn): return run_network(
-        inputs, input_image, viewdirs, network_fn,
+    def network_query_fn(inputs, input_image, input_pose, viewdirs, network_fn): return run_network(
+        inputs, input_image, input_pose, viewdirs, network_fn,
         embed_fn=embed_fn,
         embeddirs_fn=embeddirs_fn,
         netchunk=args.netchunk)
@@ -431,7 +446,7 @@ def create_nerf(args, hwf):
         'N_importance': args.N_importance,
         'network_fine': model_fine,
         'N_samples': args.N_samples,
-        'network_fn': model,
+        'network_fn': models,
         'use_viewdirs': args.use_viewdirs,
         'white_bkgd': args.white_bkgd,
         'raw_noise_std': args.raw_noise_std,
@@ -457,22 +472,29 @@ def create_nerf(args, hwf):
         ckpts = [args.ft_path]
     else:
         ckpts = [os.path.join(basedir, expname, f) for f in sorted(os.listdir(os.path.join(basedir, expname))) if
-                 ('model_' in f and 'fine' not in f and 'optimizer' not in f)]
+                 ('encoder' in f)]
+        # doesn't load fine weights?
     print('Found ckpts', ckpts)
     if len(ckpts) > 0 and not args.no_reload:
         ft_weights = ckpts[-1]
-        print('Reloading from', ft_weights)
-        model.set_weights(np.load(ft_weights, allow_pickle=True))
+        print('Reloading encoder from', ft_weights)
+        models['encoder'].set_weights(np.load(ft_weights, allow_pickle=True))
         start = int(ft_weights[-10:-4]) + 1
         print('Resetting step to', start)
 
+        ft_weights_decoder = ft_weights.replace('encoder', 'decoder')
+        print('Reloading decoder from', ft_weights_decoder)
+        models['decoder'].set_weights(np.load(ft_weights_decoder, allow_pickle=True))
+
+
+        # TODO: add support for fine model
         if model_fine is not None:
             ft_weights_fine = '{}_fine_{}'.format(
                 ft_weights[:-11], ft_weights[-10:])
             print('Reloading fine from', ft_weights_fine)
             model_fine.set_weights(np.load(ft_weights_fine, allow_pickle=True))
 
-    return render_kwargs_train, render_kwargs_test, start, grad_vars, models
+    return render_kwargs_train, render_kwargs_test, start, models
 
 
 def config_parser():
@@ -651,7 +673,7 @@ def train():
             file.write(open(args.config, 'r').read())
 
     # Create nerf model
-    render_kwargs_train, render_kwargs_test, start, grad_vars, models = create_nerf(
+    render_kwargs_train, render_kwargs_test, start, models = create_nerf(
         args, hwf)
 
     bds_dict = {
@@ -734,7 +756,9 @@ def train():
             img_i, target_i = np.random.choice(i_train,2,replace=False)
             input_img = images[img_i]
             target_img = images[target_i]
-            # pose = poses[target_i, :3, :4]
+            pose = poses[img_i, :3, :4]
+            target_pose = poses[target_i, :3, :4]
+
             # defines the transformation matrix from img_i viewpoint to target_i viewpoint
             # transformation = np.linalg.inv( poses[img_i]) @ poses[target_i]
 
@@ -754,9 +778,7 @@ def train():
             img_i = np.random.choice(i_train,1)[0]
             input_img = images[img_i]
             target_img = images[img_i]
-            # pose = poses[target_i, :3, :4]
-            # defines the transformation matrix from img_i viewpoint to target_i viewpoint
-            # transformation = np.linalg.inv( poses[img_i]) @ poses[target_i]
+            pose = poses[img_i, :3, :4]
 
             # select ray indices for training
             coords = tf.stack(tf.meshgrid(tf.range(H), tf.range(W), indexing='ij'), -1)
@@ -771,33 +793,46 @@ def train():
 
         #####  Core optimization loop  #####
 
-        with tf.GradientTape() as tape:
+        with tf.GradientTape(persistent=True) as tape:
 
             # Make predictions for color, disparity, accumulated opacity.
-            rgb, disp, acc, extras = render(
-                H, W, focal, chunk=args.chunk, rays=batch_rays, image=input_img,
-                verbose=i < 10, retraw=True, **render_kwargs_train)
+            rgb, disp, acc, feature, extras = render(
+                H, W, focal, chunk=args.chunk, rays=batch_rays, image=input_img, pose=pose,
+                verbose=i<10, retraw=True, **render_kwargs_train)
 
             # Compute MSE loss between predicted and true RGB.
             img_loss = img2mse(rgb, target_s)
             trans = extras['raw'][..., -1]
-            # what is trans?
-            loss = img_loss
+            # what is trans? -- [:,:,4] of the raw outputs from NN 
+            img_loss = img_loss
             psnr = mse2psnr(img_loss)
 
             # Add MSE loss for coarse-grained model
             if 'rgb0' in extras:
                 img_loss0 = img2mse(extras['rgb0'], target_s)
-                loss += img_loss0
+                img_loss += img_loss0
                 psnr0 = mse2psnr(img_loss0)
 
-        # grad_vars = model.trainable_variables
-        gradients = tape.gradient(loss, grad_vars)
+            # Compute MSE for rotation
+            feature_target, _ = compute_features(target_img,target_pose,render_kwargs_train['network_fn']['encoder'])
+            rot_loss = tf.keras.losses.MeanSquaredError()(feature_target, feature)
 
-        # print(f"loss is {loss}")
-        # print(grad_vars)
+            # compute the sum of loss
+            overall_loss = img_loss
+            tape.watch(overall_loss)
+            overall_loss += rot_loss
 
-        optimizer.apply_gradients(zip(gradients, grad_vars))
+
+        enc_vars = models['encoder'].trainable_variables
+        gradients = tape.gradient(overall_loss, enc_vars)
+        zips = list(zip(gradients, enc_vars))
+
+        dec_vars = models['decoder'].trainable_variables
+        gradients = tape.gradient(img_loss, dec_vars)
+        zips += list(zip(gradients, dec_vars))
+        optimizer.apply_gradients(zips)
+
+        del tape # garbage collect the persistent tape
 
         dt = time.time()-time0
 
@@ -826,10 +861,11 @@ def train():
 
         if i % args.i_print == 0 or i < 10:
 
-            print(expname, i, psnr.numpy(), loss.numpy(), global_step.numpy())
+            print(f'{expname}, iter {i}, psnr {psnr.numpy()}, img_loss {img_loss.numpy()}, rot_loss{rot_loss.numpy()}, global_step {global_step.numpy()}')
             print('iter time {:.05f}'.format(dt))
             with tf.contrib.summary.record_summaries_every_n_global_steps(args.i_print):
-                tf.contrib.summary.scalar('loss', loss)
+                tf.contrib.summary.scalar('img_loss', img_loss)
+                tf.contrib.summary.scalar('rot_loss', rot_loss)
                 tf.contrib.summary.scalar('psnr', psnr)
                 tf.contrib.summary.histogram('tran', trans)
                 if args.N_importance > 0:
@@ -842,7 +878,7 @@ def train():
                 target = images[img_i]
                 pose = poses[img_i, :3, :4]
 
-                rgb, disp, acc, extras = render(H, W, focal, chunk=args.chunk, c2w=pose, image=images[img_i],
+                rgb, disp, acc, feature, extras = render(H, W, focal, chunk=args.chunk, c2w=pose, image=images[img_i], pose=pose,
                                                 **render_kwargs_test)
 
                 psnr = mse2psnr(img2mse(rgb, target))
