@@ -40,9 +40,8 @@ def compute_features(input_image, input_pose, encoder):
     input_pose = tf.cast(input_pose, tf.float32)
 
     inputs = tf.concat([input_image, input_pose], -1)
-    outputs_flat = encoder(inputs)
-    feature_original, feature_rotated = tf.split(outputs_flat,[outputs_flat.shape[1]//2,-1], -1)
-    return feature_original, feature_rotated
+    feature_rotated = encoder(inputs)
+    return feature_rotated
 
 
 def run_network(inputs, input_image, input_pose, viewdirs, network_fn, embed_fn, embeddirs_fn, netchunk=1024*64):
@@ -60,7 +59,7 @@ def run_network(inputs, input_image, input_pose, viewdirs, network_fn, embed_fn,
         embedded = tf.concat([embedded, embedded_dirs], -1)
 
 
-    _ , feature_rotated = compute_features(input_image, input_pose, network_fn['encoder'])
+    feature_rotated = compute_features(input_image, input_pose, network_fn['encoder'])
     embedded = tf.concat([embedded, np.tile(feature_rotated, [embedded.shape[0],1])], -1)
 
     # print("Shape of embedded:")
@@ -814,7 +813,7 @@ def train():
                 psnr0 = mse2psnr(img_loss0)
 
             # Compute MSE for rotation
-            feature_target, _ = compute_features(target_img,target_pose,render_kwargs_train['network_fn']['encoder'])
+            feature_target = compute_features(target_img, target_pose, render_kwargs_train['network_fn']['encoder'])
             rot_loss = tf.keras.losses.MeanSquaredError()(feature_target, feature)
 
             # compute the sum of loss
@@ -864,7 +863,7 @@ def train():
             print(f'{expname}, iter {i}, psnr {psnr.numpy()}, img_loss {img_loss.numpy()}, rot_loss{rot_loss.numpy()}, global_step {global_step.numpy()}')
             print('iter time {:.05f}'.format(dt))
             with tf.contrib.summary.record_summaries_every_n_global_steps(args.i_print):
-                tf.contrib.summary.scalar('img_loss', img_loss)
+                tf.contrib.summary.scalar('loss', img_loss)
                 tf.contrib.summary.scalar('rot_loss', rot_loss)
                 tf.contrib.summary.scalar('psnr', psnr)
                 tf.contrib.summary.histogram('tran', trans)

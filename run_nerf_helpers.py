@@ -219,7 +219,6 @@ def init_nerf_r_models(D=8, W=256, D_rotation=3, input_ch_image=(400, 400, 3), i
     pretrained_model.trainable = False
     feature_vector = pretrained_model(feature_vector)
     feature_vector = tf.reshape(feature_vector,[-1,np.prod(feature_vector.shape[1:])])
-    feature_original = tf.identity(feature_vector)
 
     feature_len = feature_vector.shape[1]
     print("feature_vector shape is:")
@@ -229,8 +228,7 @@ def init_nerf_r_models(D=8, W=256, D_rotation=3, input_ch_image=(400, 400, 3), i
     feature_vector = tf.concat([feature_vector,input_poses], -1)
     for i in range(D_rotation):
         feature_vector = dense(W)(feature_vector)
-    feature_rotated = dense(feature_len, act=None)(feature_vector)
-    outputs_encoder = tf.concat([feature_original, feature_rotated], -1)
+    outputs_encoder = dense(feature_len, act=None)(feature_vector)
 
     model_encoder = tf.keras.Model(inputs=inputs_encoder, outputs=outputs_encoder)
 

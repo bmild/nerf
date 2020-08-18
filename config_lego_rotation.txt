@@ -23,3 +23,4 @@ random_seed = 42
 
 i_video = 50000000
 i_weights = 500
+i_img = 1000
