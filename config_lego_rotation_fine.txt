@@ -22,5 +22,5 @@ chunk = 1024
 netchunk = 1024
 
 i_video = 50000000
-i_weights = 500
+i_weights = 2000
 i_img = 1000
