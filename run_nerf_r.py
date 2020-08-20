@@ -44,7 +44,7 @@ def compute_features(input_image, input_pose, encoder):
     return feature_rotated
 
 
-def run_network(inputs, input_image, input_pose, viewdirs, network_fn, embed_fn, embeddirs_fn, netchunk=1024*64):
+def run_network(inputs, input_image, input_pose, viewdirs, network_fn, embed_fn, embeddirs_fn, netchunk=1024*64, feature=None):
     """Prepares inputs and applies network 'fn'."""
 
     inputs_flat = tf.reshape(inputs, [-1, inputs.shape[-1]])
@@ -58,17 +58,15 @@ def run_network(inputs, input_image, input_pose, viewdirs, network_fn, embed_fn,
         # viewing direction is also embedded
         embedded = tf.concat([embedded, embedded_dirs], -1)
 
-
-    feature_rotated = compute_features(input_image, input_pose, network_fn['encoder'])
-    embedded = tf.concat([embedded, np.tile(feature_rotated, [embedded.shape[0],1])], -1)
-
-    # print("Shape of embedded:")
-    # print(embedded.shape)
+    if feature is None:
+        feature = compute_features(input_image, input_pose, network_fn['encoder'])
+    
+    embedded = tf.concat([embedded, np.tile(feature, [embedded.shape[0],1])], -1)
 
     outputs_flat = batchify(network_fn['decoder'], netchunk)(embedded)
     outputs = tf.reshape(outputs_flat, list(
         inputs.shape[:-1]) + [outputs_flat.shape[-1]])
-    return outputs, feature_rotated
+    return outputs, feature
 
 
 def render_rays(ray_batch,
@@ -235,36 +233,36 @@ def render_rays(ray_batch,
     rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(
         raw, z_vals, rays_d)
 
-    # TODO: add support for fine network
-    # if N_importance > 0:
-    #     rgb_map_0, disp_map_0, acc_map_0 = rgb_map, disp_map, acc_map
+    if N_importance > 0:
+        rgb_map_0, disp_map_0, acc_map_0 = rgb_map, disp_map, acc_map
 
-    #     # Obtain additional integration times to evaluate based on the weights
-    #     # assigned to colors in the coarse model.
-    #     z_vals_mid = .5 * (z_vals[..., 1:] + z_vals[..., :-1])
-    #     z_samples = sample_pdf(
-    #         z_vals_mid, weights[..., 1:-1], N_importance, det=(perturb == 0.))
-    #     z_samples = tf.stop_gradient(z_samples)
+        # Obtain additional integration times to evaluate based on the weights
+        # assigned to colors in the coarse model.
+        z_vals_mid = .5 * (z_vals[..., 1:] + z_vals[..., :-1])
+        z_samples = sample_pdf(
+            z_vals_mid, weights[..., 1:-1], N_importance, det=(perturb == 0.))
+        z_samples = tf.stop_gradient(z_samples)
 
-    #     # Obtain all points to evaluate color, density at.
-    #     z_vals = tf.sort(tf.concat([z_vals, z_samples], -1), -1)
-    #     pts = rays_o[..., None, :] + rays_d[..., None, :] * \
-    #         z_vals[..., :, None]  # [N_rays, N_samples + N_importance, 3]
+        # Obtain all points to evaluate color, density at.
+        z_vals = tf.sort(tf.concat([z_vals, z_samples], -1), -1)
+        pts = rays_o[..., None, :] + rays_d[..., None, :] * \
+            z_vals[..., :, None]  # [N_rays, N_samples + N_importance, 3]
 
-    #     # Make predictions with network_fine.
-    #     run_fn = network_fn if network_fine is None else network_fine
-    #     raw = network_query_fn(pts, viewdirs, run_fn)
-    #     rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(
-    #         raw, z_vals, rays_d)
+        # Make predictions with network_fine.
+        run_fn = network_fn if network_fine is None else {'decoder': network_fine}
+        # re-use the same feature
+        raw, _ = network_query_fn(pts, input_image, input_pose, viewdirs, run_fn, feature=feature)
+        rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(
+            raw, z_vals, rays_d)
 
     ret = {'rgb_map': rgb_map, 'disp_map': disp_map, 'acc_map': acc_map, 'feature': feature}
     if retraw:
         ret['raw'] = raw
-    # if N_importance > 0:
-    #     ret['rgb0'] = rgb_map_0
-    #     ret['disp0'] = disp_map_0
-    #     ret['acc0'] = acc_map_0
-    #     ret['z_std'] = tf.math.reduce_std(z_samples, -1)  # [N_rays]
+    if N_importance > 0:
+        ret['rgb0'] = rgb_map_0
+        ret['disp0'] = disp_map_0
+        ret['acc0'] = acc_map_0
+        ret['z_std'] = tf.math.reduce_std(z_samples, -1)  # [N_rays]
 
     for k in ret:
         tf.debugging.check_numerics(ret[k], 'output {}'.format(k))
@@ -356,7 +354,7 @@ def render(H, W, focal,
     # Render and reshape
     all_ret = batchify_rays(rays, image, pose, chunk, **kwargs)
     for k in all_ret:
-        if k != 'feature':
+        if 'feature' not in k:
             k_sh = list(sh[:-1]) + list(all_ret[k].shape[1:])
             all_ret[k] = tf.reshape(all_ret[k], k_sh)
 
@@ -418,23 +416,23 @@ def create_nerf(args, hwf):
     skips = [4]
     # skip specifies the indices of layers that need skip connection
     encoder, decoder = init_nerf_r_models(
-        D=args.netdepth, W=args.netwidth, input_ch_image= (hwf[0],hwf[1],3),
+        D=args.netdepth, W=args.netwidth, input_ch_image=(hwf[0],hwf[1],3),
         input_ch_coord=input_ch, output_ch=output_ch, skips=skips,
-        input_ch_views=input_ch_views, use_viewdirs=args.use_viewdirs)
+        input_ch_views=input_ch_views, use_viewdirs=args.use_viewdirs, feature_len=args.feature_len)
     models = {'encoder': encoder, 'decoder': decoder}
 
-    # TODO: add support for fine model
-    model_fine = None
-    # if args.N_importance > 0:
-    #     model_fine = init_nerf_r_model(
-    #         D=args.netdepth, W=args.netwidth, input_ch_image= (hwf[0],hwf[1],3),
-    #         input_ch_coord=input_ch, output_ch=output_ch, skips=skips,
-    #         input_ch_views=input_ch_views, use_viewdirs=args.use_viewdirs)
-    #     grad_vars += model_fine.trainable_variables
-    #     models['model_fine'] = model_fine
+    # fine model: only fine decoder needed
+    decoder_fine  = None
+    if args.N_importance > 0 and args.separate_fine:
+        _ , decoder_fine = init_nerf_r_models(
+            D=args.netdepth, W=args.netwidth, input_ch_image=(hwf[0],hwf[1],3),
+            input_ch_coord=input_ch, output_ch=output_ch, skips=skips,
+            input_ch_views=input_ch_views, use_viewdirs=args.use_viewdirs, feature_len=args.feature_len)
+        models['decoder_fine'] = decoder_fine
 
-    def network_query_fn(inputs, input_image, input_pose, viewdirs, network_fn): return run_network(
-        inputs, input_image, input_pose, viewdirs, network_fn,
+
+    def network_query_fn(inputs, input_image, input_pose, viewdirs, network_fn, feature=None): return run_network(
+        inputs, input_image, input_pose, viewdirs, network_fn, feature=feature,
         embed_fn=embed_fn,
         embeddirs_fn=embeddirs_fn,
         netchunk=args.netchunk)
@@ -443,7 +441,7 @@ def create_nerf(args, hwf):
         'network_query_fn': network_query_fn,
         'perturb': args.perturb,
         'N_importance': args.N_importance,
-        'network_fine': model_fine,
+        'network_fine': decoder_fine,
         'N_samples': args.N_samples,
         'network_fn': models,
         'use_viewdirs': args.use_viewdirs,
@@ -472,26 +470,23 @@ def create_nerf(args, hwf):
     else:
         ckpts = [os.path.join(basedir, expname, f) for f in sorted(os.listdir(os.path.join(basedir, expname))) if
                  ('encoder' in f)]
-        # doesn't load fine weights?
     print('Found ckpts', ckpts)
     if len(ckpts) > 0 and not args.no_reload:
         ft_weights = ckpts[-1]
         print('Reloading encoder from', ft_weights)
         models['encoder'].set_weights(np.load(ft_weights, allow_pickle=True))
-        start = int(ft_weights[-10:-4]) + 1
-        print('Resetting step to', start)
-
         ft_weights_decoder = ft_weights.replace('encoder', 'decoder')
         print('Reloading decoder from', ft_weights_decoder)
         models['decoder'].set_weights(np.load(ft_weights_decoder, allow_pickle=True))
 
+        start = int(ft_weights[-10:-4]) + 1
+        print('Resetting step to', start)
 
-        # TODO: add support for fine model
-        if model_fine is not None:
-            ft_weights_fine = '{}_fine_{}'.format(
-                ft_weights[:-11], ft_weights[-10:])
-            print('Reloading fine from', ft_weights_fine)
-            model_fine.set_weights(np.load(ft_weights_fine, allow_pickle=True))
+        # load weights for fine decoder
+        if decoder_fine is not None:            
+            ft_weights_decoder_fine = ft_weights.replace('encoder', 'decoder_fine')
+            print('Reloading decoder_fine from', ft_weights_decoder_fine)
+            models['decoder_fine'].set_weights(np.load(ft_weights_decoder_fine, allow_pickle=True))
 
     return render_kwargs_train, render_kwargs_test, start, models
 
@@ -547,6 +542,8 @@ def config_parser():
                         help='number of coarse samples per ray')
     parser.add_argument("--N_importance", type=int, default=0,
                         help='number of additional fine samples per ray')
+    parser.add_argument("--separate_fine",  action='store_true',
+                        help='whether to use separate models for fine sampling')                  
     parser.add_argument("--perturb", type=float, default=1.,
                         help='set to 0. for no jitter, 1. for jitter')
     parser.add_argument("--use_viewdirs", action='store_true',
@@ -610,8 +607,10 @@ def config_parser():
                         help='frequency of render_poses video saving')
 
     # rotation equivariant option
-    parser.add_argument("--use_rotation",action='store_true',
+    parser.add_argument("--use_rotation", action='store_true',
                         help='use rotation equivariant for training')
+    parser.add_argument("--feature_len", type=int, default=256,
+                        help='length of feature vector extracted from image')
 
     return parser
 
@@ -827,6 +826,8 @@ def train():
         zips = list(zip(gradients, enc_vars))
 
         dec_vars = models['decoder'].trainable_variables
+        if 'decoder_fine' in models:
+            dec_vars += models['decoder_fine'].trainable_variables
         gradients = tape.gradient(img_loss, dec_vars)
         zips += list(zip(gradients, dec_vars))
         optimizer.apply_gradients(zips)

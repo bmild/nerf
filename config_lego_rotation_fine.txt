@@ -1,0 +1,26 @@
+expname = lego_inception_res_v2_fine
+basedir = ./logs
+datadir = ./data/nerf_synthetic/lego
+dataset_type = blender
+random_seed = 42
+
+use_rotation = True
+use_viewdirs = True
+
+half_res = True
+quarter_res = True
+white_bkgd = True
+
+feature_len = 256
+
+N_rand = 512
+N_samples = 32
+N_importance = 32
+separate_fine = False
+
+chunk = 256
+netchunk = 256
+
+i_video = 50000000
+i_weights = 500
+i_img = 1000
