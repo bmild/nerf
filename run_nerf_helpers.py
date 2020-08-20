@@ -193,7 +193,7 @@ def init_nerf_res_model(D=8, W=256, input_ch_image=(400, 400, 3), input_ch_coord
     model = tf.keras.Model(inputs=inputs, outputs=outputs)
     return model
 
-def init_nerf_r_models(D=8, W=256, D_rotation=3, input_ch_image=(400, 400, 3), input_ch_pose=(3,4), input_ch_coord=3, input_ch_views=3, output_ch=4, skips=[4], use_viewdirs=False):
+def init_nerf_r_models(D=8, W=256, D_rotation=3, input_ch_image=(400, 400, 3), input_ch_pose=(3,4), input_ch_coord=3, input_ch_views=3, output_ch=4, skips=[4], use_viewdirs=False, feature_len=256):
     # what is input ch views? -- input channel number for viewing direction
     # cos positional encoding is also put on viewing direction as well
 
@@ -203,6 +203,7 @@ def init_nerf_r_models(D=8, W=256, D_rotation=3, input_ch_image=(400, 400, 3), i
     def dense(W, act=relu): return tf.keras.layers.Dense(W, activation=act)
     def conv2d(filter, kernel_size, input_shape): return tf.keras.layers.Conv2D(filter, kernel_size, padding='valid', input_shape=input_shape)
     def maxpool(pool_size): return tf.keras.layers.MaxPool2D(pool_size)
+    def avgpool(pool_size): return tf.keras.layers.AveragePooling2D(pool_size)
 
     input_ch_coord = int(input_ch_coord)
     input_ch_views = int(input_ch_views)
@@ -215,12 +216,12 @@ def init_nerf_r_models(D=8, W=256, D_rotation=3, input_ch_image=(400, 400, 3), i
 
     # inception res v2
     feature_vector = tf.keras.applications.inception_resnet_v2.preprocess_input(inputs_images)
-    pretrained_model = tf.keras.applications.InceptionResNetV2(include_top=False, input_shape=input_ch_image)
+    pretrained_model = tf.keras.applications.InceptionResNetV2(include_top=False, input_shape=input_ch_image, pooling='avg')
     pretrained_model.trainable = False
     feature_vector = pretrained_model(feature_vector)
-    feature_vector = tf.reshape(feature_vector,[-1,np.prod(feature_vector.shape[1:])])
 
-    feature_len = feature_vector.shape[1]
+    feature_vector = dense(feature_len)(feature_vector)
+    
     print("feature_vector shape is:")
     print(feature_vector.shape)
 

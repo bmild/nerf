@@ -1,4 +1,4 @@
-expname = lego_inception_res_v2_rotation
+expname = lego_inception_res_v2_256_feature
 basedir = ./logs
 datadir = ./data/nerf_synthetic/lego
 dataset_type = blender
@@ -15,9 +15,9 @@ use_viewdirs = True
 
 white_bkgd = True
 
-N_rand = 256
+N_rand = 512
 chunk = 256
-netchunk = 64
+netchunk = 256
 
 random_seed = 42
 
