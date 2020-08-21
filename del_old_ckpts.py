@@ -35,6 +35,10 @@ def del_ckpts(basedir='./logs/', expname=''):
     print(f'{len(keeps)} ckpts with iteration {last_cpkt_str} will be kept')
     print(f'Other {len(removes)} cpkts will be removed')
 
+    if len(removes) == 0:
+        print('Skipping')
+        return
+
     confirm = input('Confirm?\n> ')
     if confirm != 'yes' and confirm != 'y':
         print('Aborting')
@@ -42,6 +46,8 @@ def del_ckpts(basedir='./logs/', expname=''):
 
     for f in removes:
         os.remove(f)
+    
+    print('Complete')
 
 
 if __name__ == '__main__':
