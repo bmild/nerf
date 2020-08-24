@@ -16,6 +16,7 @@ from run_nerf_helpers import *
 from utils.load_llff import load_llff_data
 from utils.load_deepvoxels import load_dv_data
 from utils.load_blender import load_blender_data
+from utils.load_shapenet import load_shapenet_data
 tf.compat.v1.enable_eager_execution()
 
 
@@ -382,7 +383,7 @@ def render_path(render_poses, hwf, chunk, render_kwargs, input_image=None, gt_im
         print(i, time.time() - t)
         t = time.time()
         rgb, disp, acc, feature, _ = render(
-            H, W, focal, image=input_image, chunk=chunk, c2w=c2w[:3, :4], **render_kwargs)
+            H, W, focal, image=input_image, pose=c2w[:3, :4], chunk=chunk, c2w=c2w[:3, :4], **render_kwargs)
         rgbs.append(rgb.numpy())
         disps.append(disp.numpy())
         if i == 0:
@@ -401,6 +402,7 @@ def render_path(render_poses, hwf, chunk, render_kwargs, input_image=None, gt_im
     disps = np.stack(disps, 0)
 
     return rgbs, disps
+
 
 def create_nerf(args, hwf):
     """Instantiate NeRF's MLP model."""
@@ -612,6 +614,14 @@ def config_parser():
     parser.add_argument("--feature_len", type=int, default=256,
                         help='length of feature vector extracted from image')
 
+    # shapenet options
+    parser.add_argument("--shapenet_train", type=int, default=5,
+                        help='number of shapenet objects used to train')
+    parser.add_argument("--shapenet_val", type=int, default=2,
+                        help='number of shapenet objects used to validate')
+    parser.add_argument("--shapenet_test", type=int, default=1,
+                        help='number of shapenet objects used to test')
+
     return parser
 
 
@@ -637,15 +647,27 @@ def train():
         near = 2.
         far = 6.
 
-        # TODO: what is it doing? doesn't seem very important
-        if args.white_bkgd:
-            images = images[..., :3]*images[..., -1:] + (1.-images[..., -1:])
-        else:
-            images = images[..., :3]
+    elif args.dataset_type == 'shapenet':
+        sample_nums = (args.shapenet_train, args.shapenet_val, args.shapenet_test)
+        images, poses, render_poses, hwf, i_split, obj_split = load_shapenet_data(
+            args.datadir, args.half_res, args.quarter_res, 
+            sample_nums=sample_nums)
+        print('Loaded shapenet', images.shape,
+              render_poses.shape, hwf, args.datadir)
+        i_train, i_val, i_test = i_split
 
+        # TODO: find out if this works
+        near = 2.
+        far = 6.
     else:
         print('Unknown dataset type', args.dataset_type, 'exiting')
         return
+
+    # remove the alpha channel from image
+    if args.white_bkgd:
+        images = images[..., :3]*images[..., -1:] + (1.-images[..., -1:])
+    else:
+        images = images[..., :3]
 
 
     # Cast intrinsics to right types
@@ -720,9 +742,12 @@ def train():
         # [(N-1)*H*W, ro+rd+rgb, 3]
         rays_rgb = np.reshape(rays_rgb, [-1, 3, 3])
         rays_rgb = rays_rgb.astype(np.float32)
-        print('shuffle rays')
-        np.random.shuffle(rays_rgb)
-        print('done')
+        if args.dataset_type == 'shapenet':
+            print('not shuffling rays as input data is shapenet')
+        else:
+            print('shuffle rays')
+            np.random.shuffle(rays_rgb)
+            print('done')
         i_batch = 0
 
     N_iters = 200000
@@ -751,7 +776,12 @@ def train():
             # in order to apply rotation equivariant, need to pick two images from train set
             # if training with multiple objects, this part of code needs to be further modifed
 
-            img_i, target_i = np.random.choice(i_train,2,replace=False)
+            if args.dataset_type == 'shapenet':
+                # need to make sure two images are from same object
+                obj_i = np.random.choice(np.arange(0,args.shapenet_train), 1)
+                img_i, target_i = np.random.choice(i_train[obj_split[obj_i]][0], 2, replace=False)
+            else:
+                img_i, target_i = np.random.choice(i_train, 2, replace=False)
             input_img = images[img_i]
             target_img = images[target_i]
             pose = poses[img_i, :3, :4]
@@ -851,6 +881,7 @@ def train():
                 save_weights(models[k], k, i)
 
         if i % args.i_testset == 0 and i > 0:
+            # TODO: check if test works
             testsavedir = os.path.join(
                 basedir, expname, 'testset_{:06d}'.format(i))
             os.makedirs(testsavedir, exist_ok=True)
