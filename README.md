@@ -11,7 +11,7 @@ Tensorflow implementation of optimizing a neural representation for a single sce
  [Ren Ng](https://www2.eecs.berkeley.edu/Faculty/Homepages/yirenng.html)<sup>1</sup> <br>
  <sup>1</sup>UC Berkeley, <sup>2</sup>Google Research, <sup>3</sup>UC San Diego  
   \*denotes equal contribution  
-
+in ECCV 2020 (Oral Presentation, Best Paper Honorable Mention)
 
 <img src='imgs/pipeline.jpg'/>
 
@@ -115,12 +115,10 @@ Poses are stored as 3x4 numpy arrays that represent camera-to-world transformati
 ## Citation
 
 ```
-@misc{mildenhall2020nerf,
-    title={NeRF: Representing Scenes as Neural Radiance Fields for View Synthesis},
-    author={Ben Mildenhall and Pratul P. Srinivasan and Matthew Tancik and Jonathan T. Barron and Ravi Ramamoorthi and Ren Ng},
-    year={2020},
-    eprint={2003.08934},
-    archivePrefix={arXiv},
-    primaryClass={cs.CV}
+@inproceedings{mildenhall2020nerf,
+  title={NeRF: Representing Scenes as Neural Radiance Fields for View Synthesis},
+  author={Ben Mildenhall and Pratul P. Srinivasan and Matthew Tancik and Jonathan T. Barron and Ravi Ramamoorthi and Ren Ng},
+  year={2020},
+  booktitle={ECCV},
 }
 ```
