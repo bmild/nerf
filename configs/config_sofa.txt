@@ -1,4 +1,4 @@
-expname = sofa_r
+expname = sofa_r_single
 basedir = ./logs
 datadir = ./data/shapenet/ShapeNetRendering/04256520/
 dataset_type = shapenet
@@ -20,5 +20,9 @@ chunk = 1024
 netchunk = 1024
 
 i_video = 50000000
-i_weights = 2000
+i_weights = 1000
 i_img = 1000
+
+shapenet_train = 5
+shapenet_val = 2
+shapenet_test = 1

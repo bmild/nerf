@@ -19,7 +19,7 @@ def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', hal
     objs = np.random.choice(objs, np.sum(sample_nums), replace=False)
 
     rot_mat = get_rotate_matrix(-np.pi / 2)
-    focal = None
+    focal = 35 # DISN fix this to 35
 
     sample_counts = [0, sample_nums[0], sample_nums[0] + sample_nums[1], sum(sample_nums)]
     i_split = [np.arange(sample_counts[i], sample_counts[i+1]) for i in range(3)]
@@ -50,18 +50,25 @@ def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', hal
                 H, W = all_imgs[-1].shape[:2]
 
                 # TODO: make sure this is correct and find out what normal matrix does
-                # # DISN version
+                # DISN version
                 # camR, _ = get_img_cam(params_list[j])
-                # # find out if this can be used
+                # pose = np.hstack([np.concatenate([camR,[[0,0,0]]]),[[0],[0],[0],[1]]])
+
+
+                # find out if this can be used
                 # obj_rot_mat = np.dot(rot90y, camR)
-                # K, RT = getBlenderProj(
-                #     az, el, distance_ratio, img_w=H, img_h=W)
+                K, RT = getBlenderProj(
+                    az, el, distance_ratio, img_w=H, img_h=W)
+                pose = np.linalg.inv(np.concatenate([RT,[[0,0,0,1]]]))
                 # trans_mat = np.linalg.multi_dot([K, RT, rot_mat])
                 # trans_mat_right = np.transpose(trans_mat)
-                # all_poses.append(trans_mat_right)
+                # pose = trans_mat_right
 
                 # NERF version
-                pose = pose_spherical(az, inl, 0)
+                # doesn't work!
+                # pose = pose_spherical(az, el, 0)
+
+
                 all_poses.append(pose)
 
                 # assign focal
@@ -87,14 +94,19 @@ def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', hal
         focal = focal/float(factor)
         all_imgs = tf.image.resize_area(all_imgs, [H, W]).numpy()
 
-    return np.array(all_imgs), np.array(all_poses), render_poses, [H, W, focal], i_split, obj_split
+    all_imgs = np.array(all_imgs, dtype=np.float32)
+    all_imgs = all_imgs/255.
+    all_poses = np.array(all_poses, dtype=np.float32)
+
+    return all_imgs, all_poses, render_poses, [H, W, focal], i_split, obj_split
 
 
 
 def getBlenderProj(az, el, distance_ratio, img_w=137, img_h=137):
     # TODO: find out what this does
+    # camera matrix https://en.wikipedia.org/wiki/Camera_matrix
     """Calculate 4x3 3D to 2D projection matrix given viewpoint parameters."""
-    F_MM = 35.  # Focal length
+    F_MM = 35.  # Focal length -- fixed to 35?
     SENSOR_SIZE_MM = 32.
     PIXEL_ASPECT_RATIO = 1.  # pixel_aspect_x / pixel_aspect_y
     RESOLUTION_PCT = 100.
@@ -140,6 +152,9 @@ def getBlenderProj(az, el, distance_ratio, img_w=137, img_h=137):
     T_world2cam = R_camfix * T_world2cam
 
     RT = np.hstack((R_world2cam, T_world2cam))
+
+    # R: rotation
+    # T: translation
 
     return K, RT
 
@@ -218,7 +233,7 @@ def camera_info(param):
 def get_cam_pos(param):
     camX = 0
     camY = 0
-    camZ = param[3]
+    camZ = param[3] # this is distance ratio
     cam_pos = np.array([camX, camY, camZ])
     return -1 * cam_pos
 

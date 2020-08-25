@@ -23,4 +23,4 @@ netchunk = 1024
 
 i_video = 50000000
 i_weights = 2000
-i_img = 1000
+i_img = 100

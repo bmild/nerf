@@ -91,7 +91,7 @@ def load_blender_data(basedir, half_res=False, testskip=1, quarter_res=False):
     # render poses for videos and render only experiments
     
     if quarter_res or half_res:
-        factor = 4 if half_res else 2
+        factor = 4 if quarter_res else 2
         H = H//factor
         W = W//factor
         focal = focal/float(factor)

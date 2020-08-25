@@ -48,6 +48,8 @@ def compute_features(input_image, input_pose, encoder):
 def run_network(inputs, input_image, input_pose, viewdirs, network_fn, embed_fn, embeddirs_fn, netchunk=1024*64, feature=None):
     """Prepares inputs and applies network 'fn'."""
 
+    # print(f'Query coordinate is {inputs[0].numpy()}')
+
     inputs_flat = tf.reshape(inputs, [-1, inputs.shape[-1]])
 
     embedded = embed_fn(inputs_flat)
@@ -195,6 +197,9 @@ def render_rays(ray_batch,
 
     # Extract ray origin, direction.
     rays_o, rays_d = ray_batch[:, 0:3], ray_batch[:, 3:6]  # [N_rays, 3] each
+
+    # TODO: find out if this affects original nerf
+    rays_d = ray_batch[:, 8:] # use normalized rays_d
 
     # Extract unit-normalized viewing direction.
     viewdirs = ray_batch[:, -3:] if ray_batch.shape[-1] > 8 else None
@@ -742,12 +747,12 @@ def train():
         # [(N-1)*H*W, ro+rd+rgb, 3]
         rays_rgb = np.reshape(rays_rgb, [-1, 3, 3])
         rays_rgb = rays_rgb.astype(np.float32)
-        if args.dataset_type == 'shapenet':
-            print('not shuffling rays as input data is shapenet')
-        else:
-            print('shuffle rays')
-            np.random.shuffle(rays_rgb)
-            print('done')
+        # if args.dataset_type == 'shapenet':
+        #     print('not shuffling rays as input data is shapenet')
+        # else:
+        #     print('shuffle rays')
+        #     np.random.shuffle(rays_rgb)
+        #     print('done')
         i_batch = 0
 
     N_iters = 200000
@@ -761,7 +766,7 @@ def train():
     else:
         print("Not using rotation")
         
-    rays_rgb = np.reshape(rays_rgb,[-1,H,W,3,3])
+    rays_rgb = np.reshape(rays_rgb,[-1, H, W, 3, 3])
 
     # Summary writers
     writer = tf.contrib.summary.create_file_writer(
