@@ -1,6 +1,6 @@
-expname = sofa
+expname = car_single
 basedir = ./logs
-datadir = ./data/shapenet/ShapeNetRendering/04256520/
+datadir = ./data/shapenet/ShapeNetRendering/02958343/
 dataset_type = shapenet
 random_seed = 42
 
@@ -23,6 +23,7 @@ i_video = 50000000
 i_weights = 1000
 i_img = 1000
 
-shapenet_train = 5
-shapenet_val = 2
-shapenet_test = 1
+shapenet_train = 1
+shapenet_val = 0
+shapenet_test = 0
+fix_objects = True

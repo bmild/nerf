@@ -9,24 +9,36 @@ rot90y = np.array([[0, 0, -1],
                    [1, 0, 0]], dtype=np.float32)
 
 
-def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', half_res=False, quarter_res=False, sample_nums=(5, 2, 1)):
+def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', half_res=False, quarter_res=False, sample_nums=(5, 2, 1), fix_objects=False):
+    # TODO: shuffle views for single obj
+    SINGLE_OBJ = False
 
     all_imgs = []
     all_poses = []
 
     objs = [obj_name for obj_name in os.listdir(basedir)
             if os.path.isdir(os.path.join(basedir, obj_name))]
-    objs = np.random.choice(objs, np.sum(sample_nums), replace=False)
+    if fix_objects:
+        objs = np.array(objs[:np.sum(sample_nums)])
+    else:
+        objs = np.random.choice(objs, np.sum(sample_nums), replace=False)
 
     rot_mat = get_rotate_matrix(-np.pi / 2)
     focal = 35 # DISN fix this to 35
 
-    sample_counts = [0, sample_nums[0], sample_nums[0] + sample_nums[1], sum(sample_nums)]
-    i_split = [np.arange(sample_counts[i], sample_counts[i+1]) for i in range(3)]
+    if sample_nums == (1,0,0):
+        # signle object mode, doesn't allow i_test
+        SINGLE_OBJ = True
+        i_split = [[],[],[]]
+        print('Using single object mode')
+    else:
+        sample_counts = [0, sample_nums[0], sample_nums[0] + sample_nums[1], sum(sample_nums)]
+        i_split = [np.arange(sample_counts[i], sample_counts[i+1]) for i in range(3)]
+
     # tracks the indices for each object
     obj_split = []
     
-    for i, obj in enumerate(objs):
+    for obj in objs:
         rendering_path = os.path.join(basedir, obj, 'rendering')
         with open(os.path.join(rendering_path, 'renderings.txt'),'r') as index_f:
             # load image file names
@@ -39,14 +51,14 @@ def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', hal
 
             imgs_indices = []
 
-            for j, img_name in enumerate(img_list):
+            for i, img_name in enumerate(img_list):
                 # read img
                 imgs_indices.append(len(all_imgs)) # add index of the image being read
                 all_imgs.append(imageio.imread(
                     os.path.join(rendering_path, img_name)))
 
                 # calculate pose
-                az, el, inl, distance_ratio, fov = params_list[j]
+                az, el, inl, distance_ratio, fov = params_list[i]
                 H, W = all_imgs[-1].shape[:2]
 
                 # TODO: make sure this is correct and find out what normal matrix does
@@ -77,11 +89,24 @@ def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', hal
                     fov = fov / 180 * np.pi
                     focal = .5 * W / np.tan(.5 * fov)
             obj_split.append(imgs_indices)
-    
-    # convert object indices in i_split to image indices
+
     obj_split = np.array(obj_split)
-    for i in range(len(i_split)):
-        i_split[i] = np.concatenate(obj_split[i_split[i]])
+
+    if SINGLE_OBJ:
+        print(f'Object for training is:{objs}')
+        i_split[0:2] = np.split(obj_split[0], [-4])
+        i_split[2] = np.array([])
+
+        # i_split[1] = np.random.choice(range(len(img_list)), 4, replace=False)
+        # i_split[0] = np.array([i for i in range(len(img_list)) if i not in i_split[1]])
+        
+    else:
+        print(f'Objects for training are:{objs[i_split[0]]}')
+        print(f'Objects for validation are:{objs[i_split[1]]}')
+        print(f'Objects for testing are:{objs[i_split[2]]}\n')
+        # convert object indices in i_split to image indices
+        for i in range(len(i_split)):
+            i_split[i] = np.concatenate(obj_split[i_split[i]])
 
     render_poses = tf.stack([pose_spherical(angle, -30.0, 4.0)
                              for angle in np.linspace(-180, 180, 40+1)[:-1]], 0)

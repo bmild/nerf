@@ -626,6 +626,8 @@ def config_parser():
                         help='number of shapenet objects used to validate')
     parser.add_argument("--shapenet_test", type=int, default=1,
                         help='number of shapenet objects used to test')
+    parser.add_argument("--fix_objects", action='store_true',
+                        help='use first X objects')
 
     return parser
 
@@ -655,8 +657,8 @@ def train():
     elif args.dataset_type == 'shapenet':
         sample_nums = (args.shapenet_train, args.shapenet_val, args.shapenet_test)
         images, poses, render_poses, hwf, i_split, obj_split = load_shapenet_data(
-            args.datadir, args.half_res, args.quarter_res, 
-            sample_nums=sample_nums)
+                        args.datadir, args.half_res, args.quarter_res, 
+                        sample_nums=sample_nums, fix_objects=args.fix_objects)
         print('Loaded shapenet', images.shape,
               render_poses.shape, hwf, args.datadir)
         i_train, i_val, i_test = i_split
@@ -781,10 +783,11 @@ def train():
             # in order to apply rotation equivariant, need to pick two images from train set
             # if training with multiple objects, this part of code needs to be further modifed
 
-            if args.dataset_type == 'shapenet':
+            if args.dataset_type == 'shapenet' and sample_nums != (1,0,0):
                 # need to make sure two images are from same object
-                obj_i = np.random.choice(np.arange(0,args.shapenet_train), 1)
-                img_i, target_i = np.random.choice(i_train[obj_split[obj_i]][0], 2, replace=False)
+                # if using single object, same as lego data
+                obj_i = np.random.choice(np.arange(0,args.shapenet_train), 1)[0]
+                img_i, target_i = np.random.choice(obj_split[obj_i], 2, replace=False)
             else:
                 img_i, target_i = np.random.choice(i_train, 2, replace=False)
             input_img = images[img_i]
