@@ -629,7 +629,6 @@ def train():
         near = 2.
         far = 6.
 
-        # TODO: what is it doing? doesn't seem very important
         if args.white_bkgd:
             images = images[..., :3]*images[..., -1:] + (1.-images[..., -1:])
         else:

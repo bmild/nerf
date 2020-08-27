@@ -10,7 +10,6 @@ rot90y = np.array([[0, 0, -1],
 
 
 def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', half_res=False, quarter_res=False, sample_nums=(5, 2, 1), fix_objects=False):
-    # TODO: shuffle views for single obj
     SINGLE_OBJ = False
 
     all_imgs = []
@@ -24,23 +23,25 @@ def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', hal
         objs = np.random.choice(objs, np.sum(sample_nums), replace=False)
 
     rot_mat = get_rotate_matrix(-np.pi / 2)
-    focal = 35 # DISN fix this to 35
+    focal = 35  # DISN fix this to 35
 
-    if sample_nums == (1,0,0):
+    if sample_nums == (1, 0, 0):
         # signle object mode, doesn't allow i_test
         SINGLE_OBJ = True
-        i_split = [[],[],[]]
+        i_split = [[], [], []]
         print('Using single object mode')
     else:
-        sample_counts = [0, sample_nums[0], sample_nums[0] + sample_nums[1], sum(sample_nums)]
-        i_split = [np.arange(sample_counts[i], sample_counts[i+1]) for i in range(3)]
+        sample_counts = [0, sample_nums[0], sample_nums[0] +
+                         sample_nums[1], sum(sample_nums)]
+        i_split = [np.arange(sample_counts[i], sample_counts[i+1])
+                   for i in range(3)]
 
     # tracks the indices for each object
     obj_split = []
-    
+
     for obj in objs:
         rendering_path = os.path.join(basedir, obj, 'rendering')
-        with open(os.path.join(rendering_path, 'renderings.txt'),'r') as index_f:
+        with open(os.path.join(rendering_path, 'renderings.txt'), 'r') as index_f:
             # load image file names
             img_list = [line.strip() for line in index_f.read().splitlines()]
             # load rotation metadata
@@ -53,7 +54,8 @@ def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', hal
 
             for i, img_name in enumerate(img_list):
                 # read img
-                imgs_indices.append(len(all_imgs)) # add index of the image being read
+                # add index of the image being read
+                imgs_indices.append(len(all_imgs))
                 all_imgs.append(imageio.imread(
                     os.path.join(rendering_path, img_name)))
 
@@ -66,12 +68,15 @@ def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', hal
                 # camR, _ = get_img_cam(params_list[j])
                 # pose = np.hstack([np.concatenate([camR,[[0,0,0]]]),[[0],[0],[0],[1]]])
 
-
                 # find out if this can be used
                 # obj_rot_mat = np.dot(rot90y, camR)
                 K, RT = getBlenderProj(
                     az, el, distance_ratio, img_w=H, img_h=W)
-                pose = np.linalg.inv(np.concatenate([RT,[[0,0,0,1]]]))
+                RT = np.transpose(RT)
+                pose = np.linalg.inv(np.concatenate([RT, [[0], [0], [0], [1]]], axis=1))
+                # note that pose here includes translation
+                # this information is lost in nerf due to operation pose[:3][:4]
+
                 # trans_mat = np.linalg.multi_dot([K, RT, rot_mat])
                 # trans_mat_right = np.transpose(trans_mat)
                 # pose = trans_mat_right
@@ -80,26 +85,31 @@ def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', hal
                 # doesn't work!
                 # pose = pose_spherical(az, el, 0)
 
-
                 all_poses.append(pose)
 
                 # assign focal
                 # note that this assumes all renderings have same focal
-                if focal is None:
-                    fov = fov / 180 * np.pi
-                    focal = .5 * W / np.tan(.5 * fov)
+                # if focal is None:
+                #     fov = fov / 180 * np.pi
+                #     focal = .5 * W / np.tan(.5 * fov)
             obj_split.append(imgs_indices)
 
     obj_split = np.array(obj_split)
 
     if SINGLE_OBJ:
         print(f'Object for training is:{objs}')
-        i_split[0:2] = np.split(obj_split[0], [-4])
+        # TODO: shuffle views for single obj
+        # i_split[0:2] = np.split(obj_split[0], [-4])
+        # i_split[2] = np.array([])
+
+        print("SETTING VAL=TRAIN")
+        i_split[0] = np.array(obj_split[0])
+        i_split[1] = np.array(obj_split[0])
         i_split[2] = np.array([])
 
         # i_split[1] = np.random.choice(range(len(img_list)), 4, replace=False)
         # i_split[0] = np.array([i for i in range(len(img_list)) if i not in i_split[1]])
-        
+
     else:
         print(f'Objects for training are:{objs[i_split[0]]}')
         print(f'Objects for validation are:{objs[i_split[1]]}')
@@ -126,9 +136,7 @@ def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', hal
     return all_imgs, all_poses, render_poses, [H, W, focal], i_split, obj_split
 
 
-
 def getBlenderProj(az, el, distance_ratio, img_w=137, img_h=137):
-    # TODO: find out what this does
     # camera matrix https://en.wikipedia.org/wiki/Camera_matrix
     """Calculate 4x3 3D to 2D projection matrix given viewpoint parameters."""
     F_MM = 35.  # Focal length -- fixed to 35?
@@ -142,7 +150,7 @@ def getBlenderProj(az, el, distance_ratio, img_w=137, img_h=137):
                           [4.371138828673793e-08, 1.0, -4.371138828673793e-08]])
 
     # Calculate intrinsic matrix.
-# 2 atan(35 / 2*32)
+    # 2 atan(35 / 2*32)
     scale = RESOLUTION_PCT / 100
     # print('scale', scale)
     f_u = F_MM * img_w * scale / SENSOR_SIZE_MM
@@ -161,6 +169,7 @@ def getBlenderProj(az, el, distance_ratio, img_w=137, img_h=137):
     R_world2obj = np.transpose(np.matrix(((ca * ce, -sa, ca * se),
                                           (sa * ce, ca, sa * se),
                                           (-se, 0, ce))))
+    # R_world2obj =  np.transpose((get_inl(np.radians(-az)) @ get_az(np.radians((-el))))
 
     # Step 2: Object coordinate to camera coordinate.
     R_obj2cam = np.transpose(np.matrix(CAM_ROT))
@@ -180,6 +189,9 @@ def getBlenderProj(az, el, distance_ratio, img_w=137, img_h=137):
 
     # R: rotation
     # T: translation
+    # K: camera calibration
+    # The world points are transformed to camera coordinates using the extrinsics parameters. 
+    # The camera coordinates are mapped into the image plane using the intrinsics parameters.
 
     return K, RT
 
@@ -223,6 +235,7 @@ def get_rotate_matrix(rotation_angle1):
 
     # return np.linalg.multi_dot([rotation_matrix_z, rotation_matrix_y, rotation_matrix_y, scale_y_neg, rotation_matrix_z, scale_y_neg, rotation_matrix_x])
     return np.linalg.multi_dot([neg, rotation_matrix_z, rotation_matrix_z, scale_y_neg, rotation_matrix_x])
+    # seems wrong
 
 
 def get_img_cam(param):
@@ -258,7 +271,7 @@ def camera_info(param):
 def get_cam_pos(param):
     camX = 0
     camY = 0
-    camZ = param[3] # this is distance ratio
+    camZ = param[3]  # this is distance ratio
     cam_pos = np.array([camX, camY, camZ])
     return -1 * cam_pos
 
@@ -292,8 +305,8 @@ def get_inl(inl):
     sin = np.sin(inl)
     # zeros = np.zeros_like(inl)
     # ones = np.ones_like(inl)
-    mat = np.asarray([cos, -1.0 * sin,
-                      0.0, sin, cos, 0.0,
+    mat = np.asarray([cos, -1.0 * sin, 0.0,
+                      sin, cos, 0.0,
                       0.0, 0.0, 1.0], dtype=np.float32)
     mat = np.reshape(mat, [3, 3])
     return mat

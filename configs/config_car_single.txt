@@ -1,4 +1,4 @@
-expname = car_single
+expname = car_single_all_train_transpose
 basedir = ./logs
 datadir = ./data/shapenet/ShapeNetRendering/02958343/
 dataset_type = shapenet
