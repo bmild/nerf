@@ -3,27 +3,31 @@ import numpy as np
 import tensorflow as tf
 import imageio
 from utils.load_blender import pose_spherical
+import h5py
 
 rot90y = np.array([[0, 0, -1],
                    [0, 1, 0],
                    [1, 0, 0]], dtype=np.float32)
 
 
-def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', half_res=False, quarter_res=False, sample_nums=(5, 2, 1), fix_objects=False):
+def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', half_res=False, quarter_res=False, sample_nums=(5, 2, 1), fix_objects=None):
     SINGLE_OBJ = False
 
     all_imgs = []
     all_poses = []
 
-    objs = [obj_name for obj_name in os.listdir(basedir)
-            if os.path.isdir(os.path.join(basedir, obj_name))]
-    if fix_objects:
-        objs = np.array(objs[:np.sum(sample_nums)])
+
+    if fix_objects is not None:
+        print('Using specified objects')
+        objs = np.array(fix_objects)
     else:
+        objs = [obj_name for obj_name in os.listdir(basedir)
+                if os.path.isdir(os.path.join(basedir, obj_name))]
         objs = np.random.choice(objs, np.sum(sample_nums), replace=False)
 
     rot_mat = get_rotate_matrix(-np.pi / 2)
     focal = 35  # DISN fix this to 35
+    # focal = .5 * 137 / np.tan(.5 * 0.436332)
 
     if sample_nums == (1, 0, 0):
         # signle object mode, doesn't allow i_test
@@ -41,6 +45,9 @@ def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', hal
 
     for obj in objs:
         rendering_path = os.path.join(basedir, obj, 'rendering')
+        sdf_fl = os.path.join('./../DISN/data/sdf/SDF_v1/02958343/', obj, "ori_sample.h5")
+        norm_mat = get_norm_matrix(sdf_fl)
+
         with open(os.path.join(rendering_path, 'renderings.txt'), 'r') as index_f:
             # load image file names
             img_list = [line.strip() for line in index_f.read().splitlines()]
@@ -72,13 +79,17 @@ def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', hal
                 # obj_rot_mat = np.dot(rot90y, camR)
                 K, RT = getBlenderProj(
                     az, el, distance_ratio, img_w=H, img_h=W)
-                RT = np.transpose(RT)
-                pose = np.linalg.inv(np.concatenate([RT, [[0], [0], [0], [1]]], axis=1))
+
+                trans_mat = np.linalg.multi_dot([K, RT, rot_mat, norm_mat])
+
+                pose = np.linalg.inv(np.concatenate([trans_mat,[[0,0,0,1]]]))
+
+                # RT = np.transpose(RT)
+                # pose = np.linalg.inv(np.concatenate([RT, [[0], [0], [0], [1]]], axis=1))
                 # note that pose here includes translation
-                # this information is lost in nerf due to operation pose[:3][:4]
+                # this information is lost in nerf due to operation pose[:3, :4]
 
                 # trans_mat = np.linalg.multi_dot([K, RT, rot_mat])
-                # trans_mat_right = np.transpose(trans_mat)
                 # pose = trans_mat_right
 
                 # NERF version
@@ -99,13 +110,13 @@ def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', hal
     if SINGLE_OBJ:
         print(f'Object for training is:{objs}')
         # TODO: shuffle views for single obj
-        # i_split[0:2] = np.split(obj_split[0], [-4])
-        # i_split[2] = np.array([])
-
-        print("SETTING VAL=TRAIN")
-        i_split[0] = np.array(obj_split[0])
-        i_split[1] = np.array(obj_split[0])
+        i_split[0:2] = np.split(obj_split[0], [-4])
         i_split[2] = np.array([])
+
+        # print("WARNING: using all train")
+        # i_split[0] = np.array(obj_split[0])
+        # i_split[1] = np.array(obj_split[0])
+        # i_split[2] = np.array([])
 
         # i_split[1] = np.random.choice(range(len(img_list)), 4, replace=False)
         # i_split[0] = np.array([i for i in range(len(img_list)) if i not in i_split[1]])
@@ -139,7 +150,7 @@ def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', hal
 def getBlenderProj(az, el, distance_ratio, img_w=137, img_h=137):
     # camera matrix https://en.wikipedia.org/wiki/Camera_matrix
     """Calculate 4x3 3D to 2D projection matrix given viewpoint parameters."""
-    F_MM = 35.  # Focal length -- fixed to 35?
+    F_MM = 35.  # Focal length
     SENSOR_SIZE_MM = 32.
     PIXEL_ASPECT_RATIO = 1.  # pixel_aspect_x / pixel_aspect_y
     RESOLUTION_PCT = 100.
@@ -194,6 +205,25 @@ def getBlenderProj(az, el, distance_ratio, img_w=137, img_h=137):
     # The camera coordinates are mapped into the image plane using the intrinsics parameters.
 
     return K, RT
+
+def get_norm_matrix(sdf_h5_file):
+    with h5py.File(sdf_h5_file, 'r') as h5_f:
+        norm_params = h5_f['norm_params'][:]
+        center, m, = norm_params[:3], norm_params[3]
+        x,y,z = center[0], center[1], center[2]
+        M_inv = np.asarray(
+            [[m, 0., 0., 0.],
+             [0., m, 0., 0.],
+             [0., 0., m, 0.],
+             [0., 0., 0., 1.]]
+        )
+        T_inv = np.asarray(
+            [[1.0 , 0., 0., x],
+             [0., 1.0 , 0., y],
+             [0., 0., 1.0 , z],
+             [0., 0., 0., 1.]]
+        )
+    return np.matmul(T_inv, M_inv)
 
 
 def get_rotate_matrix(rotation_angle1):

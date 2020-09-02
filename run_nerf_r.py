@@ -511,6 +511,8 @@ def config_parser():
                         default='./data/llff/fern', help='input data directory')
 
     # training options
+    parser.add_argument("--train_num", type=int, default=None,
+                        help='number of views used for training')
     parser.add_argument("--netdepth", type=int, default=8,
                         help='layers in network')
     parser.add_argument("--netwidth", type=int, default=256,
@@ -626,8 +628,8 @@ def config_parser():
                         help='number of shapenet objects used to validate')
     parser.add_argument("--shapenet_test", type=int, default=1,
                         help='number of shapenet objects used to test')
-    parser.add_argument("--fix_objects", action='store_true',
-                        help='use first X objects')
+    parser.add_argument("--fix_objects", type=str, action='append', default=None,
+                        help='use specified objects')
 
     return parser
 
@@ -664,8 +666,8 @@ def train():
         i_train, i_val, i_test = i_split
 
         # TODO: find out if this works
-        near = 2.
-        far = 6.
+        near = 0.
+        far = 1.
     else:
         print('Unknown dataset type', args.dataset_type, 'exiting')
         return
@@ -675,6 +677,10 @@ def train():
         images = images[..., :3]*images[..., -1:] + (1.-images[..., -1:])
     else:
         images = images[..., :3]
+
+    if args.train_num is not None and args.train_num < len(i_train):
+        i_train = i_train[:args.train_num]
+
 
 
     # Cast intrinsics to right types

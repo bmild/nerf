@@ -12,6 +12,7 @@ from run_nerf_helpers import *
 from utils.load_llff import load_llff_data
 from utils.load_deepvoxels import load_dv_data
 from utils.load_blender import load_blender_data
+from utils.load_shapenet import load_shapenet_data
 tf.compat.v1.enable_eager_execution()
 
 
@@ -572,9 +573,15 @@ def config_parser():
     parser.add_argument("--i_video",   type=int, default=50000,
                         help='frequency of render_poses video saving')
 
-    # rotation equivariant option
-    parser.add_argument("--use_rotation",action='store_true',
-                        help='use rotation equivariant for training')
+    # shapenet options
+    parser.add_argument("--shapenet_train", type=int, default=5,
+                        help='number of shapenet objects used to train')
+    parser.add_argument("--shapenet_val", type=int, default=2,
+                        help='number of shapenet objects used to validate')
+    parser.add_argument("--shapenet_test", type=int, default=1,
+                        help='number of shapenet objects used to test')
+    parser.add_argument("--fix_objects", type=str, action='append', default=None,
+                        help='use specified objects')
 
     return parser
 
@@ -648,6 +655,24 @@ def train():
         near = hemi_R-1.
         far = hemi_R+1.
 
+    elif args.dataset_type == 'shapenet':
+        sample_nums = (args.shapenet_train, args.shapenet_val, args.shapenet_test)
+        images, poses, render_poses, hwf, i_split, obj_split = load_shapenet_data(
+                        args.datadir,
+                        sample_nums=sample_nums, fix_objects=args.fix_objects)
+        print('Loaded shapenet', images.shape,
+              render_poses.shape, hwf, args.datadir)
+        i_train, i_val, i_test = i_split
+
+        # TODO: find out if this works
+        near = 0.
+        far = 1.
+
+        
+        if args.white_bkgd:
+            images = images[..., :3]*images[..., -1:] + (1.-images[..., -1:])
+        else:
+            images = images[..., :3]
     else:
         print('Unknown dataset type', args.dataset_type, 'exiting')
         return
@@ -758,8 +783,6 @@ def train():
     print('TEST views are', i_test)
     print('VAL views are', i_val)
 
-    if args.use_rotation:
-        print("Start experimental run with rotation equivariant")
         
 
     # Summary writers
@@ -770,12 +793,7 @@ def train():
     for i in range(start, N_iters):
         time0 = time.time()
 
-        # Sample random ray batch
-        if args.use_rotation:
-            # in order to apply rotation equivariant, need to pick two images from train set
-            pass
-
-        elif use_batching:
+        if use_batching:
             # Random over all images
             batch = rays_rgb[i_batch:i_batch+N_rand]  # [B, 2+1, 3*?]
             batch = tf.transpose(batch, [1, 0, 2])
