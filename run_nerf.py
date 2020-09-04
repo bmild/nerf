@@ -475,6 +475,8 @@ def config_parser():
                         default='./data/llff/fern', help='input data directory')
 
     # training options
+    parser.add_argument("--train_num", type=int, default=None,
+                    help='number of views used for training')
     parser.add_argument("--netdepth", type=int, default=8,
                         help='layers in network')
     parser.add_argument("--netwidth", type=int, default=256,
@@ -665,17 +667,21 @@ def train():
         i_train, i_val, i_test = i_split
 
         # TODO: find out if this works
-        near = 0.
-        far = 1.
+        near = 2.
+        far = 6.
 
         
-        if args.white_bkgd:
+        if args.white_bkgd and images[0].shape[-1] > 3:
             images = images[..., :3]*images[..., -1:] + (1.-images[..., -1:])
         else:
             images = images[..., :3]
     else:
         print('Unknown dataset type', args.dataset_type, 'exiting')
         return
+
+    if args.train_num is not None and args.train_num < len(i_train):
+        i_train = i_train[:args.train_num]
+
 
 
     # Cast intrinsics to right types
