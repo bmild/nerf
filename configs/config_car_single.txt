@@ -1,6 +1,6 @@
-expname = car_single_with_rot_mat_gray_0_1
+expname = car_single_blender
 basedir = ./logs
-datadir = ./data/shapenet/ShapeNetRendering/02958343/
+datadir = ./data/shapenet/blender_renderings/
 dataset_type = shapenet
 random_seed = 42
 

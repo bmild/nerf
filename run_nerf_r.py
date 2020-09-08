@@ -673,7 +673,7 @@ def train():
         return
 
     # remove the alpha channel from image
-    if args.white_bkgd:
+    if args.white_bkgd and images[0].shape[-1] > 3:
         images = images[..., :3]*images[..., -1:] + (1.-images[..., -1:])
     else:
         images = images[..., :3]
@@ -796,6 +796,8 @@ def train():
                 img_i, target_i = np.random.choice(obj_split[obj_i], 2, replace=False)
             else:
                 img_i, target_i = np.random.choice(i_train, 2, replace=False)
+                img_j, target_j = np.where(i_train==img_i)[0][0], np.where(i_train==target_i)[0][0]
+                # j is the index in rays_rgb
             input_img = images[img_i]
             target_img = images[target_i]
             pose = poses[img_i, :3, :4]
@@ -811,7 +813,7 @@ def train():
             select_inds = tf.gather_nd(coords, select_inds[:, tf.newaxis])
 
             # select rays using pose of target image
-            batch = tf.gather_nd(rays_rgb[target_i], select_inds) # [N_rand,3,3]
+            batch = tf.gather_nd(rays_rgb[target_j], select_inds) # [N_rand,3,3]
             batch_rays, target_s = batch[:,:2,:], batch[:,2,:]
             batch_rays = tf.transpose(batch_rays,[1,0,2])
 

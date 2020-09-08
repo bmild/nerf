@@ -99,8 +99,8 @@ def _load_data(basedir, factor=None, width=None, height=None, load_imgs=True):
         return
     
     sh = imageio.imread(imgfiles[0]).shape
-    poses[:2, 4, :] = np.array(sh[:2]).reshape([2, 1])
-    poses[2, 4, :] = poses[2, 4, :] * 1./factor
+    poses[:2, 4, :] = np.array(sh[:2]).reshape([2, 1]) # rescale H and W
+    poses[2, 4, :] = poses[2, 4, :] * 1./factor # rescale focal
     
     if not load_imgs:
         return poses, bds
@@ -125,7 +125,8 @@ def _load_data(basedir, factor=None, width=None, height=None, load_imgs=True):
 def normalize(x):
     return x / np.linalg.norm(x)
 
-def viewmatrix(z, up, pos):
+def viewmatrix(z, up, pos): 
+    # seems to be geting the axis?
     vec2 = normalize(z)
     vec1_avg = up
     vec0 = normalize(np.cross(vec1_avg, vec2))
@@ -141,9 +142,13 @@ def poses_avg(poses):
 
     hwf = poses[0, :3, -1:]
 
-    center = poses[:, :3, 3].mean(0)
-    vec2 = normalize(poses[:, :3, 2].sum(0))
+    center = poses[:, :3, 3].mean(0) # average of camera location
+    vec2 = normalize(poses[:, :3, 2].sum(0)) # what does this do?
     up = poses[:, :3, 1].sum(0)
+    #   |up |vec2
+    # r | r | r
+    # r | r | r
+    # r | r | r
     c2w = np.concatenate([viewmatrix(vec2, up, center), hwf], 1)
     
     return c2w
@@ -172,7 +177,7 @@ def recenter_poses(poses):
     bottom = np.tile(np.reshape(bottom, [1,1,4]), [poses.shape[0],1,1])
     poses = np.concatenate([poses[:,:3,:4], bottom], -2)
 
-    poses = np.linalg.inv(c2w) @ poses
+    poses = np.linalg.inv(c2w) @ poses # !?
     poses_[:,:3,:4] = poses[:,:3,:4]
     poses = poses_
     return poses
@@ -247,6 +252,7 @@ def load_llff_data(basedir, factor=8, recenter=True, bd_factor=.75, spherify=Fal
     print('Loaded', basedir, bds.min(), bds.max())
     
     # Correct rotation matrix ordering and move variable dim to axis 0
+    # switch column 1 and 2 then negate column 2
     poses = np.concatenate([poses[:, 1:2, :], -poses[:, 0:1, :], poses[:, 2:, :]], 1)
     poses = np.moveaxis(poses, -1, 0).astype(np.float32)
     imgs = np.moveaxis(imgs, -1, 0).astype(np.float32)
@@ -255,7 +261,7 @@ def load_llff_data(basedir, factor=8, recenter=True, bd_factor=.75, spherify=Fal
     
     # Rescale if bd_factor is provided
     sc = 1. if bd_factor is None else 1./(bds.min() * bd_factor)
-    poses[:,:3,3] *= sc
+    poses[:,:3,3] *= sc # poses[:,:3,3] is the camera location!
     bds *= sc
     
     if recenter:

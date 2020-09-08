@@ -1,7 +1,7 @@
-expname = car_single_nerf_blender_no_recenter
+expname = car_single_nerf_blender_llff_new_pose_ndc
 basedir = ./logs
-datadir = ./data/shapenet/blender_renderings/
-dataset_type = shapenet
+datadir = ./data/shapenet/blender_renderings/llff/
+dataset_type = llff
 random_seed = 42
 
 white_bkgd = True
@@ -18,3 +18,5 @@ shapenet_train = 1
 shapenet_val = 0
 shapenet_test = 0
 fix_objects = 1a0bc9ab92c915167ae33d942430658c
+
+factor = 4

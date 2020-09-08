@@ -3,14 +3,19 @@ import numpy as np
 import tensorflow as tf
 import imageio
 from utils.load_blender import pose_spherical
+from utils.load_llff import recenter_poses
 import h5py
 
 rot90y = np.array([[0, 0, -1],
                    [0, 1, 0],
                    [1, 0, 0]], dtype=np.float32)
+rot66z = np.array([[0.407, 0.914, 0.000, 0],
+                [-0.914, 0.407, -0.000, 0],
+                [-0.000, 0.000, 1.000, 0],
+                [0, 0, 0, 1]])
 
 
-def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', half_res=False, quarter_res=False, sample_nums=(5, 2, 1), fix_objects=None):
+def load_shapenet_data(basedir='./data/shapenet/blender_renderings/', half_res=False, quarter_res=False, sample_nums=(5, 2, 1), fix_objects=None):
     SINGLE_OBJ = False
 
     all_imgs = []
@@ -25,9 +30,7 @@ def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', hal
                 if os.path.isdir(os.path.join(basedir, obj_name))]
         objs = np.random.choice(objs, np.sum(sample_nums), replace=False)
 
-    rot_mat = get_rotate_matrix(-np.pi / 2)
-    focal = 35  # DISN fix this to 35
-    # focal = .5 * 137 / np.tan(.5 * 0.436332)
+    focal = 210  # DISN fix this to 35 -- this is blender default!
 
     if sample_nums == (1, 0, 0):
         # signle object mode, doesn't allow i_test
@@ -44,65 +47,27 @@ def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', hal
     obj_split = []
 
     for obj in objs:
-        rendering_path = os.path.join(basedir, obj, 'rendering')
-        sdf_fl = os.path.join('./../DISN/data/sdf/SDF_v1/02958343/', obj, "ori_sample.h5")
-        norm_mat = get_norm_matrix(sdf_fl)
+        rendering_path = os.path.join(basedir, obj, 'out', 'syn_rgb')
+        renderings = [name for name in os.listdir(rendering_path)
+                if name.endswith('.png')]
 
-        with open(os.path.join(rendering_path, 'renderings.txt'), 'r') as index_f:
-            # load image file names
-            img_list = [line.strip() for line in index_f.read().splitlines()]
-            # load rotation metadata
-            params = np.loadtxt(os.path.join(
-                rendering_path, 'rendering_metadata.txt'))
-            params_list = [params[num, ...].astype(
-                np.float32) for num in range(len(img_list))]
+        pose_path = os.path.join(basedir, obj, 'out', 'syn_pose')
+        poses = [name for name in os.listdir(pose_path)
+                if name.endswith('.txt')]
 
-            imgs_indices = []
+        imgs_indices = []
+        
 
-            for i, img_name in enumerate(img_list):
-                # read img
-                # add index of the image being read
-                imgs_indices.append(len(all_imgs))
-                all_imgs.append(imageio.imread(
-                    os.path.join(rendering_path, img_name)))
-
-                # calculate pose
-                az, el, inl, distance_ratio, fov = params_list[i]
-                H, W = all_imgs[-1].shape[:2]
-
-                # TODO: make sure this is correct and find out what normal matrix does
-                # DISN version
-                # camR, _ = get_img_cam(params_list[j])
-                # pose = np.hstack([np.concatenate([camR,[[0,0,0]]]),[[0],[0],[0],[1]]])
-
-                # find out if this can be used
-                # obj_rot_mat = np.dot(rot90y, camR)
-                K, RT = getBlenderProj(
-                    az, el, distance_ratio, img_w=H, img_h=W)
-
-                trans_mat = np.linalg.multi_dot([K, RT, rot_mat, norm_mat])
-
-                pose = np.linalg.inv(np.concatenate([trans_mat,[[0,0,0,1]]]))
-
-                # RT = np.transpose(RT)
-                # pose = np.linalg.inv(np.concatenate([RT, [[0], [0], [0], [1]]], axis=1))
-                # note that pose here includes translation
-                # this information is lost in nerf due to operation pose[:3, :4]
-
-                # trans_mat = np.linalg.multi_dot([K, RT, rot_mat])
-                # pose = trans_mat_right
-
-                # NERF version
-                # doesn't work!
-                # pose = pose_spherical(az, el, 0)
-
-                all_poses.append(pose)
-
-                # assign focal
-                # note that this assumes all renderings have same focal
-                # if focal is None:
-                #     fov = fov / 180 * np.pi
-                #     focal = .5 * W / np.tan(.5 * fov)
+        for i, rendering_name in enumerate(renderings):
+            imgs_indices.append(len(all_imgs))
+            all_imgs.append(imageio.imread(os.path.join(rendering_path, rendering_name)))
+            pose = np.loadtxt(os.path.join(pose_path,poses[i]))
+            # pose = np.linalg.inv(pose)
+            # pose = np.array([[1, 0, 0, 0],
+            #                 [0, 0, 1, 0],
+            #                 [0,-1, 0, 0],
+            #                 [0, 0, 0, 1]]) @ pose
+            all_poses.append(pose)
             obj_split.append(imgs_indices)
 
     obj_split = np.array(obj_split)
@@ -110,7 +75,8 @@ def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', hal
     if SINGLE_OBJ:
         print(f'Object for training is:{objs}')
         # TODO: shuffle views for single obj
-        i_split[0:2] = np.split(obj_split[0], [-4])
+        i_split[1] = np.array([0,8,16,24])
+        i_split[0] = np.array([i for i in range(len(all_imgs)) if i not in i_split[1]])
         i_split[2] = np.array([])
 
         # print("WARNING: using all train")
@@ -133,6 +99,8 @@ def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', hal
                              for angle in np.linspace(-180, 180, 40+1)[:-1]], 0)
     # render poses for videos and render only experiments
 
+    H, W = all_imgs[0].shape[:2]
+
     if quarter_res or half_res:
         factor = 4 if half_res else 2
         H = H//factor
@@ -140,11 +108,151 @@ def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', hal
         focal = focal/float(factor)
         all_imgs = tf.image.resize_area(all_imgs, [H, W]).numpy()
 
-    all_imgs = np.array(all_imgs, dtype=np.float32)
+    all_imgs = np.array(all_imgs).astype(np.float32)
     all_imgs = all_imgs/255.
-    all_poses = np.array(all_poses, dtype=np.float32)
+    all_poses = np.array(all_poses)
+    # all_poses = recenter_poses(all_poses)
+    all_poses = all_poses.astype(np.float32)
+    # all_poses = rot66z @ all_poses
 
     return all_imgs, all_poses, render_poses, [H, W, focal], i_split, obj_split
+
+# def load_shapenet_data(basedir='./data/shapenet/ShapeNetRendering/04256520', half_res=False, quarter_res=False, sample_nums=(5, 2, 1), fix_objects=None):
+#     SINGLE_OBJ = False
+
+#     all_imgs = []
+#     all_poses = []
+
+
+#     if fix_objects is not None:
+#         print('Using specified objects')
+#         objs = np.array(fix_objects)
+#     else:
+#         objs = [obj_name for obj_name in os.listdir(basedir)
+#                 if os.path.isdir(os.path.join(basedir, obj_name))]
+#         objs = np.random.choice(objs, np.sum(sample_nums), replace=False)
+
+#     rot_mat = get_rotate_matrix(-np.pi / 2)
+#     focal = 35  # DISN fix this to 35
+#     # focal = .5 * 137 / np.tan(.5 * 0.436332)
+
+#     if sample_nums == (1, 0, 0):
+#         # signle object mode, doesn't allow i_test
+#         SINGLE_OBJ = True
+#         i_split = [[], [], []]
+#         print('Using single object mode')
+#     else:
+#         sample_counts = [0, sample_nums[0], sample_nums[0] +
+#                          sample_nums[1], sum(sample_nums)]
+#         i_split = [np.arange(sample_counts[i], sample_counts[i+1])
+#                    for i in range(3)]
+
+#     # tracks the indices for each object
+#     obj_split = []
+
+#     for obj in objs:
+#         rendering_path = os.path.join(basedir, obj, 'rendering')
+#         sdf_fl = os.path.join('./../DISN/data/sdf/SDF_v1/02958343/', obj, "ori_sample.h5")
+#         norm_mat = get_norm_matrix(sdf_fl)
+
+#         with open(os.path.join(rendering_path, 'renderings.txt'), 'r') as index_f:
+#             # load image file names
+#             img_list = [line.strip() for line in index_f.read().splitlines()]
+#             # load rotation metadata
+#             params = np.loadtxt(os.path.join(
+#                 rendering_path, 'rendering_metadata.txt'))
+#             params_list = [params[num, ...].astype(
+#                 np.float32) for num in range(len(img_list))]
+
+#             imgs_indices = []
+
+#             for i, img_name in enumerate(img_list):
+#                 # read img
+#                 # add index of the image being read
+#                 imgs_indices.append(len(all_imgs))
+#                 all_imgs.append(imageio.imread(
+#                     os.path.join(rendering_path, img_name)))
+
+#                 # calculate pose
+#                 az, el, inl, distance_ratio, fov = params_list[i]
+#                 H, W = all_imgs[-1].shape[:2]
+
+#                 # TODO: make sure this is correct and find out what normal matrix does
+#                 # DISN version
+#                 # camR, _ = get_img_cam(params_list[j])
+#                 # pose = np.hstack([np.concatenate([camR,[[0,0,0]]]),[[0],[0],[0],[1]]])
+
+#                 # find out if this can be used
+#                 # obj_rot_mat = np.dot(rot90y, camR)
+#                 K, RT = getBlenderProj(
+#                     az, el, distance_ratio, img_w=H, img_h=W)
+
+#                 trans_mat = np.linalg.multi_dot([RT, rot_mat])
+
+#                 pose = np.linalg.inv(np.concatenate([trans_mat,[[0,0,0,1]]]))
+#                 # pose = np.concatenate([RT,[[0,0,0,1]]])
+
+#                 # RT = np.transpose(RT)
+#                 # pose = np.linalg.inv(np.concatenate([RT, [[0], [0], [0], [1]]], axis=1))
+#                 # note that pose here includes translation
+#                 # this information is lost in nerf due to operation pose[:3, :4]
+
+#                 # trans_mat = np.linalg.multi_dot([K, RT, rot_mat])
+#                 # pose = trans_mat_right
+
+#                 # NERF version
+#                 # doesn't work!
+#                 # pose = pose_spherical(az, el, 0)
+
+#                 all_poses.append(pose)
+
+#                 # assign focal
+#                 # note that this assumes all renderings have same focal
+#                 # if focal is None:
+#                 #     fov = fov / 180 * np.pi
+#                 #     focal = .5 * W / np.tan(.5 * fov)
+#             obj_split.append(imgs_indices)
+
+#     obj_split = np.array(obj_split)
+
+#     if SINGLE_OBJ:
+#         print(f'Object for training is:{objs}')
+#         # TODO: shuffle views for single obj
+#         i_split[0:2] = np.split(obj_split[0], [-4])
+#         i_split[2] = np.array([])
+
+#         # print("WARNING: using all train")
+#         # i_split[0] = np.array(obj_split[0])
+#         # i_split[1] = np.array(obj_split[0])
+#         # i_split[2] = np.array([])
+
+#         # i_split[1] = np.random.choice(range(len(img_list)), 4, replace=False)
+#         # i_split[0] = np.array([i for i in range(len(img_list)) if i not in i_split[1]])
+
+#     else:
+#         print(f'Objects for training are:{objs[i_split[0]]}')
+#         print(f'Objects for validation are:{objs[i_split[1]]}')
+#         print(f'Objects for testing are:{objs[i_split[2]]}\n')
+#         # convert object indices in i_split to image indices
+#         for i in range(len(i_split)):
+#             i_split[i] = np.concatenate(obj_split[i_split[i]])
+
+#     render_poses = tf.stack([pose_spherical(angle, -30.0, 4.0)
+#                              for angle in np.linspace(-180, 180, 40+1)[:-1]], 0)
+#     # render poses for videos and render only experiments
+
+#     if quarter_res or half_res:
+#         factor = 4 if half_res else 2
+#         H = H//factor
+#         W = W//factor
+#         focal = focal/float(factor)
+#         all_imgs = tf.image.resize_area(all_imgs, [H, W]).numpy()
+
+#     all_imgs = np.array(all_imgs, dtype=np.float32)
+#     all_imgs = all_imgs/255.
+#     all_poses = np.array(all_poses, dtype=np.float32)
+
+#     return all_imgs, all_poses, render_poses, [H, W, focal], i_split, obj_split
 
 
 def getBlenderProj(az, el, distance_ratio, img_w=137, img_h=137):
@@ -192,9 +300,9 @@ def getBlenderProj(az, el, distance_ratio, img_w=137, img_h=137):
     T_world2cam = -1 * R_obj2cam * cam_location
 
     # Step 3: Fix blender camera's y and z axis direction.
-    R_camfix = np.matrix(((1, 0, 0), (0, -1, 0), (0, 0, -1)))
-    R_world2cam = R_camfix * R_world2cam
-    T_world2cam = R_camfix * T_world2cam
+    # R_camfix = np.matrix(((1, 0, 0), (0, -1, 0), (0, 0, -1)))
+    # R_world2cam = R_camfix * R_world2cam
+    # T_world2cam = R_camfix * T_world2cam
 
     RT = np.hstack((R_world2cam, T_world2cam))
 
@@ -264,8 +372,9 @@ def get_rotate_matrix(rotation_angle1):
     # new_pts0[:, 1] = - new_pts[:, 0]
 
     # return np.linalg.multi_dot([rotation_matrix_z, rotation_matrix_y, rotation_matrix_y, scale_y_neg, rotation_matrix_z, scale_y_neg, rotation_matrix_x])
-    return np.linalg.multi_dot([neg, rotation_matrix_z, rotation_matrix_z, scale_y_neg, rotation_matrix_x])
-    # seems wrong
+    # return np.linalg.multi_dot([neg, rotation_matrix_z, rotation_matrix_z, scale_y_neg, rotation_matrix_x])
+    return rotation_matrix_x
+
 
 
 def get_img_cam(param):
