@@ -667,7 +667,7 @@ def train():
 
         # TODO: find out if this works
         near = 0.
-        far = 1.
+        far = 1.3
     else:
         print('Unknown dataset type', args.dataset_type, 'exiting')
         return
@@ -792,12 +792,14 @@ def train():
             if args.dataset_type == 'shapenet' and sample_nums != (1,0,0):
                 # need to make sure two images are from same object
                 # if using single object, same as lego data
-                obj_i = np.random.choice(np.arange(0,args.shapenet_train), 1)[0]
+                obj_i = np.random.choice(np.arange(0, args.shapenet_train), 1)[0]
                 img_i, target_i = np.random.choice(obj_split[obj_i], 2, replace=False)
+
             else:
                 img_i, target_i = np.random.choice(i_train, 2, replace=False)
-                img_j, target_j = np.where(i_train==img_i)[0][0], np.where(i_train==target_i)[0][0]
-                # j is the index in rays_rgb
+                
+            target_j = np.where(i_train==target_i)[0][0]
+            # j is the index in rays_rgb
             input_img = images[img_i]
             target_img = images[target_i]
             pose = poses[img_i, :3, :4]

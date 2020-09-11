@@ -1,0 +1,28 @@
+expname = car_blender
+basedir = ./logs
+datadir = ./data/shapenet/blender_renderings/
+dataset_type = shapenet
+random_seed = 42
+
+use_rotation = True
+use_viewdirs = True
+
+feature_len = 256
+
+white_bkgd = True
+
+N_rand = 1024
+N_samples = 64
+N_importance = 64
+separate_fine = False
+
+chunk = 1024
+netchunk = 1024
+
+i_video = 50000000
+i_weights = 1000
+i_img = 1000
+
+shapenet_train = 5
+shapenet_val = 2
+shapenet_test = 0
