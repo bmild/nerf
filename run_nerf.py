@@ -13,7 +13,6 @@ from load_llff import load_llff_data
 from load_deepvoxels import load_dv_data
 from load_blender import load_blender_data
 
-
 tf.compat.v1.enable_eager_execution()
 
 
@@ -667,6 +666,9 @@ def train():
         with open(f, 'w') as file:
             file.write(open(args.config, 'r').read())
 
+    testimgdir = os.path.join(basedir, expname, 'tboard_val_imgs')
+    os.makedirs(testimgdir, exist_ok=True)
+
     # Create nerf model
     render_kwargs_train, render_kwargs_test, start, grad_vars, models = create_nerf(
         args)
@@ -706,7 +708,7 @@ def train():
     if args.lrate_decay > 0:
         lrate = tf.keras.optimizers.schedules.ExponentialDecay(lrate,
                                                                decay_steps=args.lrate_decay * 1000, decay_rate=0.1)
-    optimizer = tf.keras.optimizers.Adam(lrate)
+    optimizer = tf.keras.optimizers.legacy.Adam(lrate)
     models['optimizer'] = optimizer
 
     global_step = tf.compat.v1.train.get_or_create_global_step()
@@ -750,9 +752,9 @@ def train():
     print('VAL views are', i_val)
 
     # Summary writers
-    writer = tf.contrib.summary.create_file_writer(
+    writer = tf.summary.create_file_writer(
         os.path.join(basedir, 'summaries', expname))
-    writer.set_as_default()
+    # writer.set_as_default()
 
     for i in range(start, N_iters):
         time0 = time.time()
@@ -835,7 +837,8 @@ def train():
         def save_weights(net, prefix, i):
             path = os.path.join(
                 basedir, expname, '{}_{:06d}.npy'.format(prefix, i))
-            np.save(path, net.get_weights())
+            # np.save(path, net.get_weights())
+            np.save(path, np.asanyarray(net.get_weights(), object))
             print('saved weights at', path)
 
         if i % args.i_weights == 0:
@@ -875,12 +878,13 @@ def train():
 
             print(expname, i, psnr.numpy(), loss.numpy(), global_step.numpy())
             print('iter time {:.05f}'.format(dt))
-            with tf.contrib.summary.record_summaries_every_n_global_steps(args.i_print):
-                tf.contrib.summary.scalar('loss', loss)
-                tf.contrib.summary.scalar('psnr', psnr)
-                tf.contrib.summary.histogram('tran', trans)
+            # with tf.summary.record_summaries_every_n_global_steps(args.i_print):
+            with writer.as_default():
+                tf.summary.scalar('loss', loss, step=i)
+                tf.summary.scalar('psnr', psnr, step=i)
+                tf.summary.histogram('tran', trans, step=i)
                 if args.N_importance > 0:
-                    tf.contrib.summary.scalar('psnr0', psnr0)
+                    tf.summary.scalar('psnr0', psnr0, step=i)
 
             if i % args.i_img == 0:
 
@@ -895,31 +899,33 @@ def train():
                 psnr = mse2psnr(img2mse(rgb, target))
                 
                 # Save out the validation image for Tensorboard-free monitoring
-                testimgdir = os.path.join(basedir, expname, 'tboard_val_imgs')
-                if i==0:
-                    os.makedirs(testimgdir, exist_ok=True)
+
+                # testimgdir = os.path.join(basedir, expname, 'tboard_val_imgs')
+                # if i==0:
+                #     os.makedirs(testimgdir, exist_ok=True)
                 imageio.imwrite(os.path.join(testimgdir, '{:06d}.png'.format(i)), to8b(rgb))
 
-                with tf.contrib.summary.record_summaries_every_n_global_steps(args.i_img):
+                # with tf.summary.record_summaries_every_n_global_steps(args.i_img):
+                with writer.as_default():
+                    tf.summary.image('rgb', to8b(rgb)[tf.newaxis], step=i)
+                    tf.summary.image(
+                        'disp', disp[tf.newaxis, ..., tf.newaxis], step=i)
+                    tf.summary.image(
+                        'acc', acc[tf.newaxis, ..., tf.newaxis], step=i)
 
-                    tf.contrib.summary.image('rgb', to8b(rgb)[tf.newaxis])
-                    tf.contrib.summary.image(
-                        'disp', disp[tf.newaxis, ..., tf.newaxis])
-                    tf.contrib.summary.image(
-                        'acc', acc[tf.newaxis, ..., tf.newaxis])
-
-                    tf.contrib.summary.scalar('psnr_holdout', psnr)
-                    tf.contrib.summary.image('rgb_holdout', target[tf.newaxis])
+                    tf.summary.scalar('psnr_holdout', psnr, step=i)
+                    tf.summary.image('rgb_holdout', target[tf.newaxis], step=i)
 
                 if args.N_importance > 0:
 
-                    with tf.contrib.summary.record_summaries_every_n_global_steps(args.i_img):
-                        tf.contrib.summary.image(
-                            'rgb0', to8b(extras['rgb0'])[tf.newaxis])
-                        tf.contrib.summary.image(
-                            'disp0', extras['disp0'][tf.newaxis, ..., tf.newaxis])
-                        tf.contrib.summary.image(
-                            'z_std', extras['z_std'][tf.newaxis, ..., tf.newaxis])
+                    # with tf.summary.record_summaries_every_n_global_steps(args.i_img):
+                    with writer.as_default():
+                        tf.summary.image(
+                            'rgb0', to8b(extras['rgb0'])[tf.newaxis], step=i)
+                        tf.summary.image(
+                            'disp0', extras['disp0'][tf.newaxis, ..., tf.newaxis], step=i)
+                        tf.summary.image(
+                            'z_std', extras['z_std'][tf.newaxis, ..., tf.newaxis], step=i)
 
         global_step.assign_add(1)
 

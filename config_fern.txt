@@ -1,6 +1,6 @@
 expname = fern_test
 basedir = ./logs
-datadir = ./data/nerf_llff_data/fern
+datadir = /home/khoa/workspace/Data_set/NeRF_Data/nerf_llff_data/fern
 dataset_type = llff
 
 factor = 8
