@@ -1,6 +1,6 @@
 import os
 import numpy as np
-import imageio 
+import imageio
 
 
 def load_dv_data(scene='cube', basedir='/data/deepvoxels', testskip=8):

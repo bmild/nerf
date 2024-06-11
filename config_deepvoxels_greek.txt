@@ -1,8 +1,17 @@
-expname = dvox_greek_test
-basedir = ./logs
-# datadir = /your/path/to/deepvoxels/data
-dataset_type = deepvoxels
-shape = greek
+expname = "dvox_greek_test"
+basedir = "./logs"  # Certifique-se de adicionar aspas ao redor do caminho
+
+# Seu código atual
+
+# Substitua esta linha
+# os.path.join(basedir, 'summaries', expname)
+
+# Por algo assim
+os.makedirs(os.path.join(basedir, 'summaries', expname), exist_ok=True)
+# Certifique-se de que 'logs' esteja incluído no caminho
+
+dataset_type = "deepvoxels"  # Adicione aspas ao redor do valor
+shape = "greek"  # Adicione aspas ao redor do valor
 
 no_batching = True
 
