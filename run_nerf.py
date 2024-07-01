@@ -807,9 +807,13 @@ def train():
         with tf.GradientTape() as tape:
 
             # Make predictions for color, disparity, accumulated opacity.
+            # NOTE: これがメインの処理: 3 -> 4に相当
+            time_before_render = time.time()
             rgb, disp, acc, extras = render(
                 H, W, focal, chunk=args.chunk, rays=batch_rays,
                 verbose=i < 10, retraw=True, **render_kwargs_train)
+            time_after_render = time.time()
+            time_render = time_after_render - time_before_render
 
             # Compute MSE loss between predicted and true RGB.
             img_loss = img2mse(rgb, target_s)
@@ -874,7 +878,9 @@ def train():
         if i % args.i_print == 0 or i < 10:
 
             print(expname, i, psnr.numpy(), loss.numpy(), global_step.numpy())
-            print('iter time {:.05f}'.format(dt))
+            print('iter time {:.05f} (rendering: {:.05f} ({:.02f}%))'.format(dt, time_render, time_render/dt*100))
+
+            
             with tf.contrib.summary.record_summaries_every_n_global_steps(args.i_print):
                 tf.contrib.summary.scalar('loss', loss)
                 tf.contrib.summary.scalar('psnr', psnr)
