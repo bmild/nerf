@@ -802,6 +802,9 @@ def train():
                 batch_rays = tf.stack([rays_o, rays_d], 0)
                 target_s = tf.gather_nd(target, select_inds)
 
+        time1 = time.time()
+        ray_time = time1 - time0
+
         #####  Core optimization loop  #####
 
         with tf.GradientTape() as tape:
@@ -816,6 +819,7 @@ def train():
             time_render = time_after_render - time_before_render
 
             # Compute MSE loss between predicted and true RGB.
+            time_before_loss = time.time()
             img_loss = img2mse(rgb, target_s)
             trans = extras['raw'][..., -1]
             loss = img_loss
@@ -826,9 +830,15 @@ def train():
                 img_loss0 = img2mse(extras['rgb0'], target_s)
                 loss += img_loss0
                 psnr0 = mse2psnr(img_loss0)
+            
+            time_after_loss = time.time()
+            time_calc_loss = time_after_loss - time_before_loss
 
+        time2 = time.time()
         gradients = tape.gradient(loss, grad_vars)
         optimizer.apply_gradients(zip(gradients, grad_vars))
+        time3 = time.time()
+        time_backprop = time3 - time2
 
         dt = time.time()-time0
 
@@ -878,7 +888,7 @@ def train():
         if i % args.i_print == 0 or i < 10:
 
             print(expname, i, psnr.numpy(), loss.numpy(), global_step.numpy())
-            print('iter time {:.05f} (rendering: {:.05f} ({:.02f}%))'.format(dt, time_render, time_render/dt*100))
+            print('iter time {:.05f} (ray calc: {:.05f} ({:.02f}%), rendering: {:.05f} ({:.02f}%), loss: {:.05f} ({:.02f}%), backprop: {:.05f} ({:.02f}%))'.format(dt, ray_time, ray_time/dt*100, time_render, time_render/dt*100, time_calc_loss, time_calc_loss/dt*100, time_backprop, time_backprop/dt*100))
 
             
             with tf.contrib.summary.record_summaries_every_n_global_steps(args.i_print):
