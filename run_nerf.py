@@ -811,15 +811,12 @@ def train():
 
             # Make predictions for color, disparity, accumulated opacity.
             # NOTE: これがメインの処理: 3 -> 4に相当
-            # time_before_render = time.time()
-            import torchprofile
-            with torchprofile.profile() as profiler:
-                rgb, disp, acc, extras = render(
-                    H, W, focal, chunk=args.chunk, rays=batch_rays,
-                    verbose=i < 10, retraw=True, **render_kwargs_train)
-                print(profiler)
-            #     time_after_render = time.time()
-            # time_render = time_after_render - time_before_render
+            time_before_render = time.time()
+            rgb, disp, acc, extras = render(
+                H, W, focal, chunk=args.chunk, rays=batch_rays,
+                verbose=i < 10, retraw=True, **render_kwargs_train)
+            time_after_render = time.time()
+            time_render = time_after_render - time_before_render
 
             # Compute MSE loss between predicted and true RGB.
             time_before_loss = time.time()
