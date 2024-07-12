@@ -742,8 +742,7 @@ def train():
         np.random.shuffle(rays_rgb)
         print('done')
         i_batch = 0
-
-    N_iters = 1000000
+    N_iters = 3
     print('Begin')
     print('TRAIN views are', i_train)
     print('TEST views are', i_test)
