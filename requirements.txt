@@ -1,0 +1,7 @@
+tensorflow-gpu==1.15
+numpy
+matplotlib
+imageio
+imageio-ffmpeg
+configargparse
+imagemagick
