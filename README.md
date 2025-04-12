@@ -1,11 +1,11 @@
 # NeRF: Neural Radiance Fields
-### [Project Page](http://tancik.com/nerf) | [Video](https://youtu.be/JuH79E8rdKc) | [Paper](https://arxiv.org/abs/2003.08934) | [Data](https://drive.google.com/drive/folders/1cK3UDIJqKAAm7zyrxRYVFJ0BRMgrwhh4)
+### [Project Page](http://matthewtancik.com/nerf) | [Video](https://youtu.be/JuH79E8rdKc) | [Paper](https://arxiv.org/abs/2003.08934) | [Data](https://drive.google.com/drive/folders/1cK3UDIJqKAAm7zyrxRYVFJ0BRMgrwhh4)
 [![Open Tiny-NeRF in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/bmild/nerf/blob/master/tiny_nerf.ipynb)<br>
 Tensorflow implementation of optimizing a neural representation for a single scene and rendering new views.<br><br>
 [NeRF: Representing Scenes as Neural Radiance Fields for View Synthesis](http://tancik.com/nerf)  
- [Ben Mildenhall](https://people.eecs.berkeley.edu/~bmild/)\*<sup>1</sup>,
+ [Ben Mildenhall](https://bmild.github.io/)\*<sup>1</sup>,
  [Pratul P. Srinivasan](https://people.eecs.berkeley.edu/~pratul/)\*<sup>1</sup>,
- [Matthew Tancik](http://tancik.com/)\*<sup>1</sup>,
+ [Matthew Tancik](http://matthewtancik.com/)\*<sup>1</sup>,
  [Jonathan T. Barron](http://jonbarron.info/)<sup>2</sup>,
  [Ravi Ramamoorthi](http://cseweb.ucsd.edu/~ravir/)<sup>3</sup>,
  [Ren Ng](https://www2.eecs.berkeley.edu/Faculty/Homepages/yirenng.html)<sup>1</sup> <br>
@@ -71,7 +71,7 @@ python run_nerf.py --config config_fern.txt
 ```
 After 200k iterations (about 15 hours), you should get a video like this at `logs/fern_test/fern_test_spiral_200000_rgb.mp4`:
 
-![ferngif](https://people.eecs.berkeley.edu/~bmild/nerf/fern_200k_256w.gif)
+![ferngif](https://bmild.github.io/nerf/fern_200k_256w.gif)
 
 To optimize a low-res Lego NeRF:
 ```
@@ -79,7 +79,7 @@ python run_nerf.py --config config_lego.txt
 ```
 After 200k iterations, you should get a video like this:
 
-![legogif](https://people.eecs.berkeley.edu/~bmild/nerf/lego_200k_256w.gif)
+![legogif](https://bmild.github.io/nerf/lego_200k_256w.gif)
 
 ### Rendering a NeRF
 
