@@ -742,8 +742,7 @@ def train():
         np.random.shuffle(rays_rgb)
         print('done')
         i_batch = 0
-
-    N_iters = 1000000
+    N_iters = 3
     print('Begin')
     print('TRAIN views are', i_train)
     print('TEST views are', i_test)
@@ -802,16 +801,24 @@ def train():
                 batch_rays = tf.stack([rays_o, rays_d], 0)
                 target_s = tf.gather_nd(target, select_inds)
 
+        time1 = time.time()
+        ray_time = time1 - time0
+
         #####  Core optimization loop  #####
 
         with tf.GradientTape() as tape:
 
             # Make predictions for color, disparity, accumulated opacity.
+            # NOTE: これがメインの処理: 3 -> 4に相当
+            time_before_render = time.time()
             rgb, disp, acc, extras = render(
                 H, W, focal, chunk=args.chunk, rays=batch_rays,
                 verbose=i < 10, retraw=True, **render_kwargs_train)
+            time_after_render = time.time()
+            time_render = time_after_render - time_before_render
 
             # Compute MSE loss between predicted and true RGB.
+            time_before_loss = time.time()
             img_loss = img2mse(rgb, target_s)
             trans = extras['raw'][..., -1]
             loss = img_loss
@@ -822,9 +829,15 @@ def train():
                 img_loss0 = img2mse(extras['rgb0'], target_s)
                 loss += img_loss0
                 psnr0 = mse2psnr(img_loss0)
+            
+            time_after_loss = time.time()
+            time_calc_loss = time_after_loss - time_before_loss
 
+        time2 = time.time()
         gradients = tape.gradient(loss, grad_vars)
         optimizer.apply_gradients(zip(gradients, grad_vars))
+        time3 = time.time()
+        time_backprop = time3 - time2
 
         dt = time.time()-time0
 
@@ -874,7 +887,9 @@ def train():
         if i % args.i_print == 0 or i < 10:
 
             print(expname, i, psnr.numpy(), loss.numpy(), global_step.numpy())
-            print('iter time {:.05f}'.format(dt))
+            print('iter time {:.05f} (ray calc: {:.05f} ({:.02f}%), rendering: {:.05f} ({:.02f}%), loss: {:.05f} ({:.02f}%), backprop: {:.05f} ({:.02f}%))'.format(dt, ray_time, ray_time/dt*100, time_render, time_render/dt*100, time_calc_loss, time_calc_loss/dt*100, time_backprop, time_backprop/dt*100))
+
+            
             with tf.contrib.summary.record_summaries_every_n_global_steps(args.i_print):
                 tf.contrib.summary.scalar('loss', loss)
                 tf.contrib.summary.scalar('psnr', psnr)
