@@ -750,9 +750,9 @@ def train():
     print('VAL views are', i_val)
 
     # Summary writers
-    writer = tf.contrib.summary.create_file_writer(
-        os.path.join(basedir, 'summaries', expname))
-    writer.set_as_default()
+    logdir = os.path.join(basedir, 'logs', 'summaries', expname)
+    os.makedirs(logdir, exist_ok=True)
+    writer = tf.contrib.summary.create_file_writer(logdir)
 
     for i in range(start, N_iters):
         time0 = time.time()
