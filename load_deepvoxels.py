@@ -74,6 +74,9 @@ def load_dv_data(scene='cube', basedir='/data/deepvoxels', testskip=8):
         poses = poses[:,:3,:4].astype(np.float32)
         return poses
     
+    if testskip == 0:
+        testskip = 1
+
     posedir = os.path.join(deepvoxels_base, 'pose')
     poses = dir2poses(posedir)
     testposes = dir2poses('{}/test/{}/pose'.format(basedir, scene))
