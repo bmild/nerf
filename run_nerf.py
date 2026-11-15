@@ -708,6 +708,8 @@ def train():
                                                                decay_steps=args.lrate_decay * 1000, decay_rate=0.1)
     optimizer = tf.keras.optimizers.Adam(lrate)
     models['optimizer'] = optimizer
+    # the learning rate schedule is driven by optimizer.iterations, so resume it from the loaded step
+    optimizer.iterations.assign(start)
 
     global_step = tf.compat.v1.train.get_or_create_global_step()
     global_step.assign(start)
